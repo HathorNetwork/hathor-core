@@ -32,7 +32,7 @@ from hathor.conf.settings import FeatureSetting, HathorSettings
 from hathor.feature_activation.utils import Features
 from hathor.serialization import Deserializer
 from hathor.transaction import Transaction
-from hathor.transaction.headers import ShieldedOutputsHeader, UnshieldBalanceHeader, VertexHeaderId
+from hathor.transaction.headers import FeeHeader, ShieldedOutputsHeader, UnshieldBalanceHeader, VertexHeaderId
 from hathor.transaction.vertex_parser._headers import deserialize_headers
 from hathor.transaction.vertex_parser._vertex_parser import VertexParser
 from hathor.verification.verification_params import VerificationParams
@@ -119,3 +119,23 @@ def test_allowed_headers_excludes_shielded_when_disabled() -> None:
     allowed_on = verifier.get_allowed_headers(tx, params_on)
     assert ShieldedOutputsHeader in allowed_on
     assert UnshieldBalanceHeader in allowed_on
+
+
+def test_allowed_headers_admits_fee_header_for_shielded_outputs_before_fee_tokens() -> None:
+    """A tx with shielded outputs must pay its shielded fee in a `FeeHeader` (`verify_shielded_fee`),
+    so the header is admitted whenever shielded transactions are active, even before `FEE_TOKENS`.
+    """
+    verifier = VertexVerifier(reactor=Mock(), settings=get_global_settings(), feature_service=Mock())
+    features = dataclasses.replace(Features.all_enabled(), fee_tokens=False)
+    params = VerificationParams.for_mempool(best_block=Mock(), features=features)
+
+    shielded_tx = Transaction()
+    shielded_tx.headers.append(ShieldedOutputsHeader())
+    assert FeeHeader in verifier.get_allowed_headers(shielded_tx, params)
+
+    # Without shielded outputs there is no shielded fee to pay, so `FEE_TOKENS` still gates the header.
+    assert FeeHeader not in verifier.get_allowed_headers(Transaction(), params)
+
+    features_off = dataclasses.replace(features, shielded_transactions=False)
+    params_off = VerificationParams.for_mempool(best_block=Mock(), features=features_off)
+    assert FeeHeader not in verifier.get_allowed_headers(shielded_tx, params_off)

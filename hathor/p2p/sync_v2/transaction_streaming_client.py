@@ -54,7 +54,7 @@ class TransactionStreamingClient:
         #      it will be correctly enabled when doing a full validation anyway.
         #      We can also set the `nc_block_root_id` to `None` because we only call `verify_basic`,
         #      which doesn't need it.
-        # Derive feature state from the first partial block so permissive features
+        # Derive feature state from the first partial block's parent so permissive features
         # (e.g. shielded_transactions) are correctly gated during verify_basic.
         self.verification_params = self._make_verification_params(partial_blocks[0])
 
@@ -256,14 +256,27 @@ class TransactionStreamingClient:
         """Build verification params for the given block.
 
         Permissive features (nanocontracts, fee_tokens, shielded_transactions) are
-        derived from the block's feature activation state so that verify_basic
-        does not incorrectly reject transactions that use activated features.
+        derived from the feature activation state so that verify_basic does not
+        incorrectly reject transactions that use activated features.
+
+        The state is read from the block's parent, not from the block itself. A partial
+        block has never been through `on_new_block`, so its static metadata is not set,
+        and it cannot be set yet: computing it reads the block's transaction parents, which
+        are exactly the vertices this client is about to download. The parent is always
+        fully validated and in storage at this point: it is either the last block saved
+        before streaming, or the previous partial block, which `on_block_complete` has just
+        saved. Its state only differs from the block's at the evaluation boundary where a
+        feature becomes active. A node's mempool only accepts a transaction using a feature
+        once that feature is active at its best block, so in practice such a transaction is
+        confirmed after the activation block, not by it. Full validation in
+        `on_block_complete` re-checks everything with the block's own state.
         """
         manager = self.protocol.node
+        parent_block = self.tx_storage.get_block(blk.get_block_parent_hash())
         features = Features.from_vertex(
             settings=manager._settings,
             feature_service=manager.feature_service,
-            vertex=blk,
+            vertex=parent_block,
         )
         return VerificationParams(
             nc_block_root_id=None,

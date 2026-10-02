@@ -615,8 +615,12 @@ class NodeBlockSync(SyncAgent):
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         try:
             yield self.vertex_handler.on_new_block(blk, deps=vertex_list)
-        except InvalidNewTransaction:
+        except InvalidNewTransaction as e:
+            self.log.warn('invalid block or transaction received', blk=blk.hash_hex, reason=repr(e))
             self.protocol.send_error_and_close_connection('invalid vertex received')
+            # Re-raise so the streaming client stops here: the block was not saved, so the next
+            # partial block cannot be prepared on top of it.
+            raise
 
     def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[_HeightInfo]]:
         """ Returns the peer's block hashes in the given heights.
