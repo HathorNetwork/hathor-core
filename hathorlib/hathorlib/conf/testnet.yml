@@ -86,10 +86,22 @@ FEATURE_ACTIVATION:
       version: 0.70.0
       signal_support_by_default: true
 
+    RESTORE_DAA_TARGET:
+      bit: 0
+      # Right now the best block is 2_288_147 at Friday, 2026-10-02 15:54:05 GMT
+      # Restores the 30s block target and the full block reward after REDUCE_DAA_TARGET.
+      start_height: 2_288_640  # expected around 2026-10-02 16:55:00 GMT
+      timeout_height: 2_300_160  # 48 evaluation periods (24 hours at 7.5s blocks)
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.72.0
+      signal_support_by_default: true
+
 ENABLE_NANO_CONTRACTS: feature_activation
 ENABLE_FEE_BASED_TOKENS: feature_activation
 ENABLE_OPCODES_V2: feature_activation
 ENABLE_DAA_V2: feature_activation
+ENABLE_DAA_V3: feature_activation
 RESTRICT_DUP_ACTIONS: feature_activation
 NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
   - WWFiNeWAFSmgtjm4ht2MydwS5GY3kMJsEK
