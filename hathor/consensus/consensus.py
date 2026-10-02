@@ -454,6 +454,9 @@ class ConsensusAlgorithm:
                 case Feature.REDUCE_DAA_TARGET:
                     # This feature does not affect transaction verification, only DAA parameters and the Nano runtime.
                     pass
+                case Feature.RESTORE_DAA_TARGET:
+                    # This feature does not affect transaction verification, only DAA parameters.
+                    pass
                 case Feature.SHIELDED_TRANSACTIONS:
                     # Shielded verification — including the reorg activation rule — lands
                     # in PR 5. The feature ships gated OFF, so this case is unreachable
