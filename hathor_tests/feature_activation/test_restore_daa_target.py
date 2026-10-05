@@ -36,7 +36,6 @@ from hathor.transaction import Block
 from hathor.transaction.exceptions import InvalidBlockReward
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor_tests.simulation.base import SimulatorTestCase
-from hathor_tests.token_amount import UnsignedAmount
 from hathorlib.conf.settings import FeatureSetting
 
 if TYPE_CHECKING:
@@ -201,9 +200,7 @@ class TestDAAFactorySelectV3:
         parent_block = Mock()
         parent_block.get_height.return_value = 20
         daa = factory.create_from_parent(parent_block)
-        assert daa.get_reward_for_next_block(parent_block) == UnsignedAmount.from_v1(
-            settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK,
-        )
+        assert daa.get_reward_for_next_block(parent_block) == settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
         # Heights [1..4] V1, [5..8] V2, [9..20] V3.
         assert daa.get_mined_tokens(20) == _per_block_rewards(settings, 20, v2_start=5, v3_start=9)
 
@@ -384,8 +381,8 @@ class RestoreDAATargetSimulationTest(SimulatorTestCase):
             'REDUCED_AVG_TIME_BETWEEN_BLOCKS_10X': 75,
         })
         self.simulator.settings = self.settings
-        self.v1_reward = UnsignedAmount.from_v1(self.settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK)
-        self.v2_reward = UnsignedAmount.from_v1(self.settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // 4)
+        self.v1_reward = self.settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
+        self.v2_reward = self.settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // 4
 
     def get_simulator_builder(self) -> Builder:
         return self.simulator.get_default_builder().set_settings(self.settings)
@@ -396,7 +393,7 @@ class RestoreDAATargetSimulationTest(SimulatorTestCase):
         assert artifacts.manager.daa_factory._feature_service == artifacts.feature_service
         return artifacts.manager, artifacts.feature_service
 
-    def _expected_reward(self, height: int) -> UnsignedAmount:
+    def _expected_reward(self, height: int) -> int:
         if REDUCE_ACTIVATION_HEIGHT < height <= RESTORE_ACTIVATION_HEIGHT:
             return self.v2_reward
         return self.v1_reward
@@ -428,7 +425,7 @@ class RestoreDAATargetSimulationTest(SimulatorTestCase):
         # reward was checked above, so the total is the sum of the rewards of each era.
         n_v2 = RESTORE_ACTIVATION_HEIGHT - REDUCE_ACTIVATION_HEIGHT
         n_v1 = tip.get_height() - n_v2
-        assert daa.get_mined_tokens(tip.get_height()) == n_v1 * self.v1_reward.raw() + n_v2 * self.v2_reward.raw()
+        assert daa.get_mined_tokens(tip.get_height()) == n_v1 * self.v1_reward + n_v2 * self.v2_reward
 
     def test_mines_through_reduce_and_restore(self) -> None:
         manager, feature_service = self._create_manager()
@@ -456,7 +453,7 @@ class RestoreDAATargetSimulationTest(SimulatorTestCase):
         manager, _ = self._create_manager()
         verifier = manager.verification_service.verifiers.block
 
-        def tampered_child(parent_height: int, reward: UnsignedAmount) -> Block:
+        def tampered_child(parent_height: int, reward: int) -> Block:
             parent = manager.tx_storage.get_block_by_height(parent_height)
             assert parent is not None
             block = manager.generate_mining_block(parent_block_hash=parent.hash)
