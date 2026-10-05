@@ -88,10 +88,10 @@ FEATURE_ACTIVATION:
 
     RESTORE_DAA_TARGET:
       bit: 0
-      # Right now the best block is 2_291_750 at Friday, 2026-10-02 23:35 GMT
+      # Right now the best block is 2_322_126 at Monday, 2026-10-05 14:56 GMT
       # Restores the 30s block target and the full block reward after REDUCE_DAA_TARGET.
-      start_height: 2_298_720  # 9578 * 240, expected around 2026-10-03 14:05 GMT
-      timeout_height: 2_321_760  # 96 evaluation periods (48 hours at 7.5s blocks)
+      start_height: 2_322_480  # 9677 * 240, expected around 2026-10-05 15:41 GMT
+      timeout_height: 2_345_520  # 96 evaluation periods (48 hours at 7.5s blocks)
       minimum_activation_height: 0
       lock_in_on_timeout: false
       version: 0.72.0
