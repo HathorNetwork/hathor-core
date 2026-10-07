@@ -224,6 +224,7 @@ SETTINGS = HathorSettings(
     ENABLE_FEE_BASED_TOKENS=FeatureSetting.FEATURE_ACTIVATION,
     ENABLE_OPCODES_V2=FeatureSetting.FEATURE_ACTIVATION,
     ENABLE_DAA_V2=FeatureSetting.FEATURE_ACTIVATION,
+    ENABLE_DAA_V3=FeatureSetting.FEATURE_ACTIVATION,
     RESTRICT_DUP_ACTIONS=FeatureSetting.FEATURE_ACTIVATION,
     NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES=[
         'HDkKGHwDHTuUGbhET73XdTJZkS8uU7PHf9',
@@ -341,6 +342,22 @@ SETTINGS = HathorSettings(
                 minimum_activation_height=0,
                 lock_in_on_timeout=False,
                 version='0.70.0',
+                signal_support_by_default=True,
+            ),
+            Feature.RESTORE_DAA_TARGET: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=1,
+                # Right now the best block is 7_194_514 at Wednesday, 2026-10-07 16:51 GMT.
+                # Restores the 30s block target and the full block reward after REDUCE_DAA_TARGET.
+                # Bit 1 is free since REDUCE_DAA_TARGET's window ended at 6_713_280.
+                # Heights assume ~17.5s blocks: mainnet runs well above the 7.5s DAA V2 target
+                # (16.7s to 18.4s on average over the last 2k to 60k blocks), and it keeps that
+                # pace until this feature activates.
+                start_height=7_257_600,  # expected around 2026-10-20 10:31 GMT
+                timeout_height=7_539_840,  # 14 intervals (~8 weeks), expected around 2026-12-16 14:31 GMT
+                minimum_activation_height=7_398_720,  # 7 intervals (~4 weeks), expected around 2026-11-18 00:31 GMT
+                lock_in_on_timeout=False,
+                version='0.71.1',
                 signal_support_by_default=True,
             ),
         }
