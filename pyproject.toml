@@ -10,10 +10,10 @@ authors = [
 ]
 license = "Apache-2.0"
 readme = "README.md"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.12,<3.14"
 classifiers = [
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
     "Private :: Do Not Upload",
 ]
@@ -102,7 +102,7 @@ types-pyopenssl = "=22.1.0.2"
 types-pyyaml = "=6.0.12.9"
 
 [tool.poetry.dependencies]
-python = ">=3.11,<3.14"
+python = ">=3.12,<3.14"
 twisted = "~24.7.0"
 autobahn = "~24.4.2"
 base58 = "~2.1.1"
@@ -148,7 +148,7 @@ hathor-ct-crypto = { path = "htr-rs/crates/hathor-ct-crypto", editable = true }
 
 [tool.ruff]
 line-length = 119
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 # E/W: pycodestyle errors and warnings. F: Pyflakes. I: import sorting.
