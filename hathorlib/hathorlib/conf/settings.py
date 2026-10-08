@@ -524,6 +524,9 @@ class HathorSettings(BaseModel):
     # Used to enable DAA V2 and Nano Runtime V2.
     ENABLE_DAA_V2: FeatureSetting = FeatureSetting.DISABLED
 
+    # Used to enable DAA V3, which restores the original block target and reward after DAA V2.
+    ENABLE_DAA_V3: FeatureSetting = FeatureSetting.DISABLED
+
     # Used to restrict duplicate actions.
     RESTRICT_DUP_ACTIONS: FeatureSetting = FeatureSetting.DISABLED
 

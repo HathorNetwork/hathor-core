@@ -46,6 +46,7 @@ class Features:
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
             Feature.RESTRICT_DUP_ACTIONS: settings.RESTRICT_DUP_ACTIONS,
             Feature.REDUCE_DAA_TARGET: settings.ENABLE_DAA_V2,
+            Feature.RESTORE_DAA_TARGET: settings.ENABLE_DAA_V3,
             Feature.SHIELDED_TRANSACTIONS: settings.ENABLE_SHIELDED_TRANSACTIONS,
         }
 
@@ -64,9 +65,14 @@ class Features:
         nano_runtime_version = (
             NanoRuntimeVersion.V2 if feature_is_active[Feature.REDUCE_DAA_TARGET] else NanoRuntimeVersion.V1
         )
-        daa_version = (
-            DAAVersion.V2 if feature_is_active[Feature.REDUCE_DAA_TARGET] else DAAVersion.V1
-        )
+        # RESTORE_DAA_TARGET takes precedence: once active, the DAA is V3 even though REDUCE_DAA_TARGET
+        # (which also gates the Nano runtime V2) remains active forever.
+        if feature_is_active[Feature.RESTORE_DAA_TARGET]:
+            daa_version = DAAVersion.V3
+        elif feature_is_active[Feature.REDUCE_DAA_TARGET]:
+            daa_version = DAAVersion.V2
+        else:
+            daa_version = DAAVersion.V1
 
         return Features(
             count_checkdatasig_op=feature_is_active[Feature.COUNT_CHECKDATASIG_OP],
@@ -127,7 +133,7 @@ class Features:
             opcodes_version=OpcodesVersion.V2,
             nano_runtime_version=NanoRuntimeVersion.V2,
             restrict_dup_actions=True,
-            daa_version=DAAVersion.V2,
+            daa_version=DAAVersion.V3,
             shielded_transactions=True,
         )
 
