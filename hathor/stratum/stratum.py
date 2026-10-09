@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 from structlog import get_logger
 from twisted.internet import task
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, ensureDeferred
 from twisted.internet.interfaces import IAddress, IDelayedCall
 from twisted.internet.protocol import ServerFactory, connectionDone
 from twisted.protocols.basic import LineReceiver
@@ -551,17 +551,12 @@ class StratumProtocol(JSONRPC):
             self.log.info('low hash, new block candidate', tx=tx)
 
         if isinstance(tx, Block):
-            try:
-                # We only propagate blocks here in stratum
-                # For tx we need to propagate in the resource,
-                # so we can get the possible errors
-                self.manager.submit_block(tx)
-                self.blocks_found += 1
-            except (InvalidNewTransaction, TxValidationError) as e:
-                # Block propagation failed, but the share was succesfully submited
-                self.log.warn('block propagation failed', block=tx, error=e)
-            else:
-                self.log.info('new block found', block=tx)
+            # We only propagate blocks here in stratum
+            # For tx we need to propagate in the resource,
+            # so we can get the possible errors
+            # asubmit_block may delay processing of the block, so we bridge the coroutine to
+            # the reactor and let it complete on its own.
+            ensureDeferred(self._asubmit_block(tx))
         elif isinstance(tx, Transaction):
             self.log.info('transaction mined', tx=tx)
             funds_hash = tx.get_funds_hash()
@@ -576,6 +571,17 @@ class StratumProtocol(JSONRPC):
                     d.callback(tx)
         else:
             assert False, 'tx should either be a Block or Transaction'
+
+    async def _asubmit_block(self, block: Block) -> None:
+        """Submit a mined block, applying the optional submission delay and handling errors."""
+        try:
+            accepted = await self.manager.asubmit_block(block)
+        except (InvalidNewTransaction, TxValidationError) as e:
+            # Block propagation failed, but the share was succesfully submited
+            self.log.warn('block propagation failed', block=block, error=e)
+        else:
+            self.blocks_found += 1
+            self.log.info('new block found', block=block, accepted=accepted)
 
     def job_request(self) -> None:
         """ Sends a job request to the connected client
