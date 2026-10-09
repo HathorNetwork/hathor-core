@@ -1696,4 +1696,4 @@ client = ["aiohttp"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "bdb0844394e615e0d7c5891fb1361b42052f29bbb8a2d88e7a68eab8a8e0b516"
+content-hash = "46ce60eb9cb2cab728ad833ccba15e777d44c84a87204b8103bd4964bbdb359d"

@@ -28,6 +28,12 @@ jobs:
         python-version:
           - '3.11'
           - '3.12'
+        debian:
+          - bullseye
+        include:
+          - python-impl: python
+            python-version: '3.14'
+            debian: bookworm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,6 +47,7 @@ jobs:
           export GITHUB_EVENT_NUMBER='${{ github.event.number }}'
           export MATRIX_PYTHON_IMPL='${{ matrix.python-impl }}'
           export MATRIX_PYTHON_VERSION='${{ matrix.python-version }}'
+          export MATRIX_DEBIAN='${{ matrix.debian }}'
           export SECRETS_DOCKERHUB_IMAGE='${{ secrets.DOCKERHUB_IMAGE }}'
           export SECRETS_GHCR_IMAGE='${{ secrets.GHCR_IMAGE }}'
 
@@ -77,15 +84,17 @@ jobs:
         with:
           path: /tmp/.buildx-cache
           # this key is setup such that every branch has its cache and new branches can reuse master's cache, but not the other way around
-          key: ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ matrix.debian }}-${{ github.head_ref || github.ref }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-refs/heads/master-
+            ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ matrix.debian }}-refs/heads/master-
       - name: Build and export to Docker
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ steps.prep.outputs.dockerfile }}
-          build-args: PYTHON=${{ matrix.python-version }}
+          build-args: |
+            PYTHON=${{ matrix.python-version }}
+            DEBIAN=${{ matrix.debian }}
           pull: true
           load: true
           tags: ${{ env.TEST_TAG }}
@@ -99,7 +108,9 @@ jobs:
         with:
           context: .
           file: ${{ steps.prep.outputs.dockerfile }}
-          build-args: PYTHON=${{ matrix.python-version }}
+          build-args: |
+            PYTHON=${{ matrix.python-version }}
+            DEBIAN=${{ matrix.debian }}
           platforms: linux/amd64,linux/arm64
           pull: true
           push: ${{ github.event_name != 'pull_request' && steps.prep.outputs.push }}
