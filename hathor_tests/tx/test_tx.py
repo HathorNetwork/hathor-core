@@ -85,7 +85,7 @@ class TransactionTest(unittest.TestCase):
         _input = TxInput(genesis_block.hash, 0, b'')
 
         # spend less than what was generated
-        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1)).to_v1()
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
@@ -108,7 +108,7 @@ class TransactionTest(unittest.TestCase):
         _input = TxInput(genesis_block.hash, 0, b'')
 
         # spend more than what was generated
-        value = (genesis_block.outputs[0].value + UnsignedAmount.from_v1(1))
+        value = (genesis_block.outputs[0].value + UnsignedAmount.from_v1(1)).to_v1()
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
@@ -966,7 +966,7 @@ class TransactionTest(unittest.TestCase):
 
         # boundary value MAX_OUTPUT_VALUE_32 (2**31 - 1) encoded as 8 bytes must also be rejected,
         # otherwise it's a malleability hole: the canonical form fits in 4 bytes
-        outputs = [TxOutput(MAX_OUTPUT_VALUE_32, b'')]
+        outputs = [TxOutput(UnsignedAmount.from_v1(MAX_OUTPUT_VALUE_32), b'')]
         tx = Transaction(outputs=outputs, parents=parents)
         original_struct = tx.get_struct()
         struct_bytes = tx.get_funds_struct()
@@ -982,7 +982,7 @@ class TransactionTest(unittest.TestCase):
             Transaction.create_from_struct(struct_bytes)
 
         # the canonical 8-byte form just above the boundary must still round-trip
-        outputs = [TxOutput(MAX_OUTPUT_VALUE_32 + 1, b'')]
+        outputs = [TxOutput(UnsignedAmount.from_v1(MAX_OUTPUT_VALUE_32 + 1), b'')]
         tx = Transaction(outputs=outputs, parents=parents)
         tx.update_hash()
         tx2 = Transaction.create_from_struct(tx.get_struct())
@@ -999,7 +999,7 @@ class TransactionTest(unittest.TestCase):
         assert tx == tx2
 
         # Validating that all output values must be positive
-        value = 1
+        value = UnsignedAmount(1)
         address = decode_address('WUDtnw3GYjvUnZmiHAmus6hhs9GoSUSJMG')
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
@@ -1023,7 +1023,7 @@ class TransactionTest(unittest.TestCase):
 
         # Can't instantiate an output with negative value
         with self.assertRaises(InvalidOutputValue):
-            TxOutput(-1, script)
+            TxOutput(UnsignedAmount(-1), script)
 
     def test_tx_version_and_signal_bits(self):
         from hathor.transaction.base_transaction import TxVersion
@@ -1166,7 +1166,7 @@ class TransactionTest(unittest.TestCase):
         new_address_b58 = self.get_address(0)
         new_address = decode_address(new_address_b58)
 
-        output1 = TxOutput((value - UnsignedAmount.from_v1(100)), script)
+        output1 = TxOutput((value - UnsignedAmount.from_v1(100)).to_v1(), script)
         script2 = P2PKH.create_output_script(new_address)
         output2 = TxOutput(UnsignedAmount.from_v1(100), script2)
 
@@ -1191,7 +1191,7 @@ class TransactionTest(unittest.TestCase):
         output3_address_b58 = self.get_address(1)
         output3_address = decode_address(output3_address_b58)
         script3 = P2PKH.create_output_script(output3_address)
-        output3 = TxOutput((value - UnsignedAmount.from_v1(100)), script3)
+        output3 = TxOutput((value - UnsignedAmount.from_v1(100)).to_v1(), script3)
 
         input2 = TxInput(tx2.hash, 0, b'')
         tx3 = Transaction(weight=1, inputs=[input2], outputs=[output3], parents=parents,
@@ -1245,7 +1245,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_output_single_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1)).to_v1()
         _input = TxInput(genesis_block.hash, 0, b'')
 
         hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_OUTPUT + 1)
@@ -1258,7 +1258,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_output_multi_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1)).to_v1()
         _input = TxInput(genesis_block.hash, 0, b'')
         num_outputs = 5
 
@@ -1271,7 +1271,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_output_single_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1)).to_v1()
         _input = TxInput(genesis_block.hash, 0, b'')
 
         hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_OUTPUT - 1)
@@ -1282,7 +1282,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_output_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1)).to_v1()
         _input = TxInput(genesis_block.hash, 0, b'')
         num_outputs = 5
 
@@ -1294,7 +1294,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_input_single_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1)).to_v1()
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         _output = TxOutput(value, script)
@@ -1308,7 +1308,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_input_multi_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1)).to_v1()
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         _output = TxOutput(value, script)
@@ -1323,7 +1323,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_input_single_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1)).to_v1()
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         _output = TxOutput(value, script)
@@ -1336,7 +1336,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_input_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1)).to_v1()
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         _output = TxOutput(value, script)

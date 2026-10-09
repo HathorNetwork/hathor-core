@@ -155,7 +155,7 @@ class Runner:
         self._updated_tokens_totals: defaultdict[TokenUid, SignedAmount] = defaultdict(SignedAmount)
 
         # Information about fees paid during execution inter-contract calls.
-        self._paid_actions_fees: defaultdict[TokenUid, UnsignedAmount] = defaultdict(int)
+        self._paid_actions_fees: defaultdict[TokenUid, UnsignedAmount] = defaultdict(UnsignedAmount.zero)
 
     def disable_call_trace(self) -> None:
         """Disable call trace. Useful when the runner is only used to call view methods, for example in APIs."""
@@ -458,7 +458,7 @@ class Runner:
         # Validate fees
         for fee in fees:
             try:
-                validate_fee_amount(self._settings, fee.token_uid, fee.amount)
+                validate_fee_amount(self._settings, fee.token_uid, UnsignedAmount(fee.amount))
             except InvalidFeeAmount as e:
                 raise NCInvalidFee(str(e)) from e
 
@@ -483,9 +483,9 @@ class Runner:
         for fee in fees:
             assert fee.amount > 0
             self._update_tokens_amount(
-                fee=UpdateTokenBalanceRecord(token_uid=fee.token_uid, amount=-fee.amount),
+                fee=UpdateTokenBalanceRecord(token_uid=fee.token_uid, amount=SignedAmount(-fee.amount)),
             )
-            self._register_paid_fee(fee.token_uid, fee.amount)
+            self._register_paid_fee(fee.token_uid, UnsignedAmount(fee.amount))
 
         ctx_actions = Context.__group_actions__(actions)
         # Call the other contract method.
@@ -523,7 +523,7 @@ class Runner:
 
         # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
         self._updated_tokens_totals = defaultdict(SignedAmount)
-        self._paid_actions_fees = defaultdict(int)
+        self._paid_actions_fees = defaultdict(UnsignedAmount.zero)
 
     def _validate_balances(self, ctx: Context) -> None:
         """
@@ -1056,13 +1056,13 @@ class Runner:
         fee_amount = calculate_mint_fee(
             settings=self._settings,
             token_version=token_info.token_version,
-            amount=amount,
+            amount=UnsignedAmount(amount),
             fee_payment_token=self._get_token(fee_payment_token),
         )
 
         assert amount > 0 and fee_amount < 0
         self._update_tokens_amount(
-            operation=UpdateTokenBalanceRecord(token_uid=token_uid, amount=amount),
+            operation=UpdateTokenBalanceRecord(token_uid=token_uid, amount=SignedAmount(amount)),
             fee=UpdateTokenBalanceRecord(token_uid=fee_payment_token, amount=fee_amount),
         )
 
@@ -1095,7 +1095,7 @@ class Runner:
         fee_amount = calculate_melt_fee(
             settings=self._settings,
             token_version=token_info.token_version,
-            amount=amount,
+            amount=UnsignedAmount(amount),
             fee_payment_token=self._get_token(fee_payment_token),
         )
 
@@ -1111,7 +1111,7 @@ class Runner:
                 assert_never(token_info.token_version)
 
         self._update_tokens_amount(
-            operation=UpdateTokenBalanceRecord(token_uid=token_uid, amount=-amount),
+            operation=UpdateTokenBalanceRecord(token_uid=token_uid, amount=SignedAmount(-amount)),
             fee=UpdateTokenBalanceRecord(token_uid=fee_payment_token, amount=fee_amount),
         )
 
@@ -1375,14 +1375,14 @@ class Runner:
         fee_amount = calculate_mint_fee(
             settings=self._settings,
             token_version=token_version,
-            amount=amount,
+            amount=UnsignedAmount(amount),
             fee_payment_token=fee_payment_token,
         )
         assert amount > 0 and fee_amount < 0
         self._update_tokens_amount(
             operation=CreateTokenRecord(
                 token_uid=token_uid,
-                amount=amount,
+                amount=UnsignedAmount(amount),
                 token_version=token_version,  # type: ignore[arg-type]
                 token_symbol=token_symbol,
                 token_name=token_name,

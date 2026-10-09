@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 
 class TokenData:
-    received: UnsignedAmount = 0
-    spent: UnsignedAmount = 0
+    received: UnsignedAmount = UnsignedAmount.zero()
+    spent: UnsignedAmount = UnsignedAmount.zero()
     name: str = ''
     symbol: str = ''
 

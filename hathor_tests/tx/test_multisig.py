@@ -95,7 +95,7 @@ class MultisigTestCase(unittest.TestCase):
         multisig_output = TxOutput(value_200, multisig_script)
         wallet_output = TxOutput(value_300, create_output_script(self.address))
         outside_output = TxOutput(
-            (first_block_amount - value_200 - value_300),
+            (first_block_amount - value_200 - value_300).to_v1(),
             create_output_script(self.outside_address),
         )
 
