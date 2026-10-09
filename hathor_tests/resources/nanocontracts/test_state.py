@@ -239,7 +239,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             [settings.HATHOR_TOKEN_UID, timestamp],
             self.genesis_private_key,
         )
-        self.assertTrue(self.manager.on_new_tx(nc))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(nc))
         add_new_block(self.manager)
 
         response = yield self.web.get(
@@ -287,7 +287,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             [settings.HATHOR_TOKEN_UID, date_last_bet],
             self.genesis_private_key,
         )
-        self.assertTrue(self.manager.on_new_tx(nc))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(nc))
 
         # Before the execution we can't get the state
         response0 = yield self.web.get(
@@ -376,7 +376,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
 
         self.manager.cpu_mining_service.resolve(nc_bet)
         # Add to DAG.
-        self.assertTrue(self.manager.on_new_tx(nc_bet))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(nc_bet))
         # Execute the deposit
         block2 = add_new_block(self.manager)
 

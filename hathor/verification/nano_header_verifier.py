@@ -117,7 +117,7 @@ class NanoHeaderVerifier:
                 )
 
     def verify_method_call(self, tx: BaseTransaction, params: VerificationParams) -> None:
-        if not params.harden_nano_restrictions:
+        if not params.apply_mempool_restrictions:
             return
 
         assert tx.is_nano_contract()
@@ -172,7 +172,7 @@ class NanoHeaderVerifier:
                 raise NCTxValidationError from exception
 
     def verify_seqnum(self, tx: BaseTransaction, params: VerificationParams) -> None:
-        if not params.harden_nano_restrictions:
+        if not params.apply_mempool_restrictions:
             return
 
         assert tx.is_nano_contract()

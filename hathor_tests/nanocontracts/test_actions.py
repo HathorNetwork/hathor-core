@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 import pytest
 
-from hathor.feature_activation.utils import Features
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.nanocontracts import HATHOR_TOKEN_UID, NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.exception import NCInvalidAction
@@ -104,11 +103,7 @@ class TestActions(unittest.TestCase):
             ['tx0', 'tx1', 'tx2', 'TKA'],
             Transaction,
         )
-        best_block = self.manager.tx_storage.get_best_block()
-        self.verification_params = VerificationParams.for_mempool(
-            best_block=best_block,
-            features=Features.all_enabled()
-        )
+        self.verification_params = VerificationParams.for_apis(self.manager.tx_storage)
 
         # We finish a manual setup of tx1, so it can be used directly in verification methods.
         self.tx1.storage = self.manager.tx_storage
@@ -957,7 +952,9 @@ class TestActions(unittest.TestCase):
             NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=2, amount=UnsignedAmount.from_v1(1)),
         ])
 
-        params = dataclasses.replace(self.verification_params, harden_token_restrictions=False)
+        # Disable the mempool token-hygiene check so the out-of-bounds action is reached: `tx1` carries
+        # an unused TKA token that `verify_tokens` would otherwise reject first.
+        params = dataclasses.replace(self.verification_params, apply_mempool_restrictions=False)
         with pytest.raises(NCInvalidAction) as e:
             self.manager.verification_service.verify(self.tx1, params)
         assert str(e.value) == 'DEPOSIT token index 2 not found'

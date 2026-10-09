@@ -69,7 +69,11 @@ def add_custom_tx(
     address: Optional[str] = None,
     inc_timestamp: int = 0
 ) -> Transaction:
-    """Add a custom tx based on the gen_custom_tx(...) method."""
+    """Add a custom tx based on the gen_custom_tx(...) method.
+
+    Injects through the trusted entry point, which skips the mempool-entry restrictions, so custom DAG
+    patterns (conflicts with confirmed txs, spends of voided txs, old timestamps) can be built freely.
+    """
     tx = gen_custom_tx(manager,
                        tx_inputs,
                        n_outputs=n_outputs,
@@ -78,7 +82,7 @@ def add_custom_tx(
                        resolve=resolve,
                        address=address,
                        inc_timestamp=inc_timestamp)
-    manager.propagate_tx(tx)
+    manager.vertex_handler.on_new_trusted_vertex(tx)
     return tx
 
 
@@ -184,9 +188,14 @@ def gen_custom_base_tx(manager: HathorManager,
 
 def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
                             tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
-    tx = gen_new_double_spending(manager, use_same_parents=use_same_parents, tx=tx, weight=weight)
-    manager.propagate_tx(tx)
-    return tx
+    """Add a deliberately double-spending tx.
+
+    Injects through the trusted entry point, which skips the mempool-entry conflict checks, so the
+    double spend reaches consensus and can be voided there.
+    """
+    new_tx = gen_new_double_spending(manager, use_same_parents=use_same_parents, tx=tx, weight=weight)
+    manager.vertex_handler.on_new_trusted_vertex(new_tx)
+    return new_tx
 
 
 def add_new_tx(

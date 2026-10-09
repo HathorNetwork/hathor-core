@@ -109,7 +109,9 @@ class SoftVoidedTestCase(SimulatorTestCase):
         txD2 = gen_custom_tx(manager2, [(txB, 0)])
         txD2.timestamp = txD1.timestamp + 2
         txD2.update_hash()
-        manager2.propagate_tx(txD2)
+        # txD2 spends an output of the voided-and-confirmed txB, so it must enter through the trusted
+        # entry point, which skips the mempool-entry conflict check.
+        manager2.vertex_handler.on_new_trusted_vertex(txD2)
         graphviz.labels[txD2.hash] = 'txD2'
 
         blk1meta = blk1.get_metadata()

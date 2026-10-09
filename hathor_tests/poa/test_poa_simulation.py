@@ -556,4 +556,4 @@ class PoaSimulationTest(SimulatorTestCase):
         token_tx.inputs[0].data = P2PKH.create_input_data(public_key_bytes, signature)
         token_tx.update_hash()
 
-        assert manager.on_new_tx(token_tx)
+        assert manager.vertex_handler.on_new_trusted_vertex(token_tx)

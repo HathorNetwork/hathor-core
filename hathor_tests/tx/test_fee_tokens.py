@@ -748,8 +748,10 @@ class FeeTokenTest(unittest.TestCase):
             _input.data = signature_data
 
     def resolve_and_propagate(self, tx: Transaction) -> None:
+        # The trusted entry point skips the mempool-entry restrictions, so consensus-valid full melts
+        # (which reference a token only in inputs) can be injected.
         self.manager.cpu_mining_service.resolve(tx)
-        self.manager.propagate_tx(tx)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx)
         self.run_to_completion()
 
     def test_pay_fee_with_fbt(self) -> None:
