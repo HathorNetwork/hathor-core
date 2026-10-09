@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Hathor Labs
 # SPDX-License-Identifier: Apache-2.0
 
-py_sources = hathor/ hathor_tests/ extras/custom_tests/
+py_sources = hathor/ hathor_tests/ extras/custom_tests/ extras/github/
 
 .PHONY: all
 all: check tests
@@ -73,11 +73,11 @@ tests-full:
 
 .PHONY: mypy
 mypy:
-	mypy -p hathor -p hathor_tests -p extras.custom_tests
+	mypy -p hathor -p hathor_tests -p extras.custom_tests -p extras.github
 
 .PHONY: dmypy
 dmypy:
-	dmypy run --timeout 86400 -- -p hathor -p hathor_tests -p extras.custom_tests
+	dmypy run --timeout 86400 -- -p hathor -p hathor_tests -p extras.custom_tests -p extras.github
 
 .PHONY: ruff
 ruff:

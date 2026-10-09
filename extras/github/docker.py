@@ -1,22 +1,25 @@
 # SPDX-FileCopyrightText: Hathor Labs
 # SPDX-License-Identifier: Apache-2.0
 
-import re
+import datetime
 import os
-from typing import Dict
+import re
+from collections.abc import Mapping
 
-def print_output(output: Dict):
+
+def print_output(output: Mapping[str, str]) -> None:
     outputs = ['{}={}\n'.format(k, v) for k, v in output.items()]
     with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
         f.writelines(outputs)
 
-def prep_base_version(environ: Dict):
-    GITHUB_REF = environ.get('GITHUB_REF')
-    GITHUB_EVENT_NAME = environ.get('GITHUB_EVENT_NAME')
-    GITHUB_SHA = environ.get('GITHUB_SHA')
-    GITHUB_EVENT_DEFAULT_BRANCH = environ.get('GITHUB_EVENT_DEFAULT_BRANCH')
-    GITHUB_EVENT_NUMBER = environ.get('GITHUB_EVENT_NUMBER')
-    GITHUB_REPOSITORY = environ.get('GITHUB_REPOSITORY')
+
+def prep_base_version(environ: Mapping[str, str]) -> tuple[dict[str, str], str, bool, bool]:
+    GITHUB_REF = environ.get('GITHUB_REF', '')
+    GITHUB_EVENT_NAME = environ.get('GITHUB_EVENT_NAME', '')
+    GITHUB_SHA = environ.get('GITHUB_SHA', '')
+    GITHUB_EVENT_DEFAULT_BRANCH = environ.get('GITHUB_EVENT_DEFAULT_BRANCH', '')
+    GITHUB_EVENT_NUMBER = environ.get('GITHUB_EVENT_NUMBER', '')
+    GITHUB_REPOSITORY = environ.get('GITHUB_REPOSITORY', '')
 
     ref = GITHUB_REF
 
@@ -27,7 +30,7 @@ def prep_base_version(environ: Dict):
 
     overwrite_hathor_core_version = False
 
-    output = {}
+    output: dict[str, str] = {}
 
     if GITHUB_EVENT_NAME == 'schedule':
         commit_short_sha = GITHUB_SHA[:8]
@@ -35,9 +38,8 @@ def prep_base_version(environ: Dict):
         is_nightly = True
     elif ref.startswith('refs/tags/'):
         git_tag = ref[10:]
-        base_version = git_tag.split('-', 1)[0]
-
-        pre_release = (git_tag.split('-', 1)[1:] or [None])[0]
+        # `v0.53.0-rc.1` splits into `v0.53.0` and `rc.1`, `v0.53.0` leaves an empty pre-release
+        base_version, _, pre_release = git_tag.partition('-')
         overwrite_hathor_core_version = True
         # This will be used to check against the versions in our source files
         check_version = base_version[1:]
@@ -63,35 +65,34 @@ def prep_base_version(environ: Dict):
 
     overwrite_hathor_core_version = is_release or is_pre_release or is_nightly
     # We don't know for sure at this point in which cases we should enable Slack notification,
-    # but we know when we should disable it for sure
-    output['disable-slack-notification'] = not (is_release or is_pre_release)
+    # but we know when we should disable it for sure.
+    # NOTE: these are lowercase strings, not bools, because the workflow compares them against 'false'
+    output['disable-slack-notification'] = 'false' if (is_release or is_pre_release) else 'true'
 
     if GITHUB_REPOSITORY.lower() != 'hathornetwork/hathor-core':
-        output['disable-slack-notification'] = True
+        output['disable-slack-notification'] = 'true'
 
     return output, base_version, is_pre_release, overwrite_hathor_core_version
 
 
-def prep_tags(environ: Dict, base_version: str, is_pre_release: bool):
-    MATRIX_PYTHON_IMPL = environ.get('MATRIX_PYTHON_IMPL')
-    MATRIX_PYTHON_VERSION = environ.get('MATRIX_PYTHON_VERSION')
+def prep_tags(environ: Mapping[str, str], base_version: str, is_pre_release: bool) -> dict[str, str]:
+    MATRIX_PYTHON_VERSION = environ.get('MATRIX_PYTHON_VERSION', '')
 
-    SECRETS_DOCKERHUB_IMAGE = environ.get('SECRETS_DOCKERHUB_IMAGE')
-    SECRETS_GHCR_IMAGE = environ.get('SECRETS_GHCR_IMAGE')
+    SECRETS_DOCKERHUB_IMAGE = environ.get('SECRETS_DOCKERHUB_IMAGE', '')
+    SECRETS_GHCR_IMAGE = environ.get('SECRETS_GHCR_IMAGE', '')
 
-    GITHUB_EVENT_NAME = environ.get('GITHUB_EVENT_NAME')
-    GITHUB_SHA = environ.get('GITHUB_SHA')
+    GITHUB_EVENT_NAME = environ.get('GITHUB_EVENT_NAME', '')
+    GITHUB_SHA = environ.get('GITHUB_SHA', '')
 
-    import datetime
-    import re
-
-    output = {}
+    output: dict[str, str] = {}
 
     # Extract default python versions from the Dockerfiles
-    def extract_pyver(filename):
-        for line in open(filename).readlines():
-            if line.startswith('ARG PYTHON'):
-                return line.split('=')[1].strip()
+    def extract_pyver(filename: str) -> str:
+        with open(filename) as f:
+            for line in f:
+                if line.startswith('ARG PYTHON'):
+                    return line.split('=')[1].strip()
+        raise ValueError(f'Could not find an `ARG PYTHON` line in {filename}')
     dockerfile = 'Dockerfile'
     default_python = 'python' + extract_pyver(dockerfile)
     suffix = 'python' + MATRIX_PYTHON_VERSION
@@ -114,24 +115,29 @@ def prep_tags(environ: Dict, base_version: str, is_pre_release: bool):
         tags.add(minor + '-' + suffix)
         if suffix == default_python:
             tags.add('latest')
-    elif GITHUB_EVENT_NAME == 'push' and not is_pre_release:
+    elif GITHUB_EVENT_NAME == 'push' and not is_pre_release and suffix == default_python:
         tags.add('sha-' + GITHUB_SHA[:8])
 
     # Build the image list and set outputs
     output['version'] = version
+    # Never publish from a pull request. The docker workflow has no `pull_request` trigger today, but if one is ever
+    # added, pull requests from a branch of this repository would see the registry secrets and start publishing
+    # `pr-<number>` tags to the production registries
+    is_pull_request = GITHUB_EVENT_NAME in ('pull_request', 'pull_request_target')
     images = []
-    docker_image = SECRETS_DOCKERHUB_IMAGE
+    docker_image = '' if is_pull_request else SECRETS_DOCKERHUB_IMAGE
     if docker_image:
         images.append(docker_image)
         output['login-dockerhub'] = 'true'
     else:
         output['login-dockerhub'] = 'false'
-    ghcr_image = SECRETS_GHCR_IMAGE
+    ghcr_image = '' if is_pull_request else SECRETS_GHCR_IMAGE
     if ghcr_image:
         images.append(ghcr_image)
         output['login-ghcr'] = 'true'
     else:
         output['login-ghcr'] = 'false'
+    output['repositories'] = ','.join(images)
     if images and tags:
         output['tags'] = ','.join(f'{i}:{t}' for i in images for t in tags)
         output['push'] = 'true'
@@ -145,7 +151,7 @@ def prep_tags(environ: Dict, base_version: str, is_pre_release: bool):
     return output
 
 
-def overwrite_version(base_version: str):
+def overwrite_version(base_version: str) -> None:
     with open('BUILD_VERSION', 'w') as file:
         if base_version.startswith('v'):
             base_version = base_version[1:]

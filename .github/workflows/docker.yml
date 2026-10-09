@@ -13,97 +13,131 @@ on: # yamllint disable-line rule:truthy
       - v*
   schedule:
     - cron: '0 4 * * *'  # nightlies at 4am UTC
+permissions:
+  contents: read
+  packages: write
+# one run per ref, newest wins: two pushes in a row would otherwise race in `merge`, and the slower run could
+# publish the older image over the newer one on the shared tags (`stable`, `latest`, `sha-<short>`).
+# `github.event_name` is part of the group because the nightly schedule also runs on the default branch, and the
+# nightly and a `master` push publish different tags, so neither should cancel the other
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
 env:
   TEST_TAG: hathor-core:test
+  # the architectures the `merge` job expects to find, as OCI architecture names. keep in sync with the
+  # `architecture` matrix of the `buildx` job below, which cannot reference the `env` context
+  ARCHITECTURES: amd64 arm64
 jobs:
   buildx:
-    name: buildx ${{ matrix.python-impl }}-${{ matrix.python-version }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 180  # default is 360
+    name: buildx python-${{ matrix.python-version }} ${{ matrix.architecture.platform }}
+    runs-on: ${{ matrix.architecture.runner }}
+    timeout-minutes: 60  # default is 360
     strategy:
       fail-fast: false
       matrix:
-        python-impl:
-          - python
         python-version:
           - '3.11'
           - '3.12'
+        architecture:
+          - name: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+            runner_arch: X64
+            uname_arch: x86_64
+          - name: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            runner_arch: ARM64
+            uname_arch: aarch64
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Prepare base version
         id: prep
-        run: |
-          export GITHUB_REF='${{ github.ref }}'
-          export GITHUB_EVENT_NAME='${{ github.event_name }}'
-          export GITHUB_SHA='${{ github.sha }}'
-          export GITHUB_EVENT_DEFAULT_BRANCH='${{ github.event.repository.default_branch }}'
-          export GITHUB_EVENT_NUMBER='${{ github.event.number }}'
-          export MATRIX_PYTHON_IMPL='${{ matrix.python-impl }}'
-          export MATRIX_PYTHON_VERSION='${{ matrix.python-version }}'
-          export SECRETS_DOCKERHUB_IMAGE='${{ secrets.DOCKERHUB_IMAGE }}'
-          export SECRETS_GHCR_IMAGE='${{ secrets.GHCR_IMAGE }}'
-
-          python extras/github/docker.py
+        uses: ./.github/actions/prep-docker-tags
+        with:
+          python-version: ${{ matrix.python-version }}
+          dockerhub-image: ${{ secrets.DOCKERHUB_IMAGE }}
+          ghcr-image: ${{ secrets.GHCR_IMAGE }}
       - name: Check version
         if: steps.prep.outputs.check-version
+        shell: bash
         env:
           VERSION: ${{ steps.prep.outputs.check-version }}
         run: make check-version
-      - name: Set up QEMU  # arm64 is not available natively
-        uses: docker/setup-qemu-action@v3
+      - name: Assert runner architecture
+        shell: bash
+        env:
+          EXPECTED_RUNNER_ARCH: ${{ matrix.architecture.runner_arch }}
+          EXPECTED_UNAME_ARCH: ${{ matrix.architecture.uname_arch }}
+        run: |
+          if [ "$RUNNER_ARCH" != "$EXPECTED_RUNNER_ARCH" ]; then
+            echo "Expected runner architecture $EXPECTED_RUNNER_ARCH, got $RUNNER_ARCH" >&2
+            exit 1
+          fi
+          if [ "$(uname -m)" != "$EXPECTED_UNAME_ARCH" ]; then
+            echo "Expected uname architecture $EXPECTED_UNAME_ARCH, got $(uname -m)" >&2
+            exit 1
+          fi
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           version: latest
-          install: true
           driver-opts: network=host
       - name: Login to DockerHub
-        uses: docker/login-action@v3
-        if: steps.prep.outputs.login-dockerhub == 'true'
+        uses: docker/login-action@v4
+        if: env.ACT == '' && steps.prep.outputs.login-dockerhub == 'true'
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        if: steps.prep.outputs.login-ghcr == 'true'
+        uses: docker/login-action@v4
+        if: env.ACT == '' && steps.prep.outputs.login-ghcr == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        if: steps.prep_base_version.outputs.is-nightly == 'false'
-        with:
-          path: /tmp/.buildx-cache
-          # this key is setup such that every branch has its cache and new branches can reuse master's cache, but not the other way around
-          key: ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-refs/heads/master-
-      - name: Build and export to Docker
-        uses: docker/build-push-action@v6
+      # build and smoke test before pushing anything, so a broken build never gets a tag pointing at it. this is a
+      # per-leg guarantee only: the legs push independently, so a leg that fails after another already pushed still
+      # leaves that other leg's manifest behind, unreferenced and only reachable by digest. `merge` is what turns
+      # digests into tags, and it only runs once every leg is in.
+      # the push below re-runs this same build, which hits the builder's local cache and costs seconds
+      - name: Build and load locally
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ steps.prep.outputs.dockerfile }}
           build-args: PYTHON=${{ matrix.python-version }}
+          platforms: ${{ matrix.architecture.platform }}
           pull: true
           load: true
           tags: ${{ env.TEST_TAG }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache
+          # no labels here on purpose: this image is only fed to the smoke test below and then thrown away, so
+          # leaving them off avoids a second copy of the label block to keep in sync. labels do not affect
+          # layer content, so the push below still reuses every layer built here
+          # XXX: no layer cache on purpose, don't add one back without measuring first. on native runners this
+          # builds in about two minutes, and the layers that change on every commit (COPY hathor, poetry build,
+          # pip install) come after the only ones a cache could hold, so they can never hit. a type=gha cache
+          # needs mode=max to be worth anything at all here (the expensive work happens in stage-0, which
+          # mode=min drops since it only keeps the final image's layers) and that measured ~600MB per matrix
+          # leg, competing with main.yml's poetry/mypy caches and htr-rs.yml's cargo caches for the 10GB
+          # repository-wide budget, for no reliable wall-clock gain
       - name: Test image
+        shell: bash
         run: docker run --rm ${{ env.TEST_TAG }} quick_test --data / --testnet
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        if: ${{ !env.ACT }}  # Skip this step when testing locally with https://github.com/nektos/act
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        if: env.ACT == '' && steps.prep.outputs.push == 'true'
         with:
           context: .
           file: ${{ steps.prep.outputs.dockerfile }}
           build-args: PYTHON=${{ matrix.python-version }}
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.architecture.platform }}
           pull: true
-          push: ${{ github.event_name != 'pull_request' && steps.prep.outputs.push }}
-          tags: ${{ steps.prep.outputs.tags }}
+          tags: ${{ steps.prep.outputs.repositories }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           # see: https://github.com/opencontainers/image-spec/blob/master/annotations.md
           labels: |
             org.opencontainers.image.title=${{ github.event.repository.name }}
@@ -114,10 +148,190 @@ jobs:
             org.opencontainers.image.created=${{ steps.prep.outputs.created }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=${{ github.event.repository.license.spdx_id }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache
+      - name: Save digest
+        if: env.ACT == '' && steps.prep.outputs.push == 'true'
+        shell: bash
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          # `merge` checks this again on the way out of the artifact, on purpose: failing here names the leg that
+          # produced the bad digest, which a failure over there cannot
+          if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Invalid image digest: $DIGEST" >&2
+            exit 1
+          fi
+          mkdir -p '${{ runner.temp }}/digests'
+          printf '%s\n' "$DIGEST" > '${{ runner.temp }}/digests/${{ matrix.architecture.name }}'
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        if: env.ACT == '' && steps.prep.outputs.push == 'true'
+        with:
+          name: docker-digest-python${{ matrix.python-version }}-${{ matrix.architecture.name }}
+          path: ${{ runner.temp }}/digests/${{ matrix.architecture.name }}
+          if-no-files-found: error
+          # artifacts belong to the run, not to the attempt, so the one this leg uploaded on a previous attempt is
+          # still there when the whole run is re-run. without this the upload would fail on the name conflict
+          overwrite: true
+          # these are a few dozen bytes each, keep them around long enough that re-running only the `merge` job
+          # remains possible for a while after the build
+          retention-days: 7
+
+  merge:
+    name: merge python-${{ matrix.python-version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs:
+      - buildx
+    # not success(): each python version is merged independently, so a failing leg of one version must not hold back
+    # the other. not always() either, that would keep spawning doomed merge jobs after a run is cancelled
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - '3.11'
+          - '3.12'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Prepare tags
+        id: prep
+        uses: ./.github/actions/prep-docker-tags
+        with:
+          python-version: ${{ matrix.python-version }}
+          dockerhub-image: ${{ secrets.DOCKERHUB_IMAGE }}
+          ghcr-image: ${{ secrets.GHCR_IMAGE }}
+      # every step below is skipped when there is no registry to publish to, so without this the job would report
+      # success over a failed build in a repository with no registry secrets configured. when there is something to
+      # publish, a missing leg is caught by `Validate digests` instead, per python version
+      - name: Assert the build succeeded
+        if: needs.buildx.result != 'success' && steps.prep.outputs.push != 'true'
+        shell: bash
+        env:
+          BUILDX_RESULT: ${{ needs.buildx.result }}
+        run: |
+          echo "Nothing to merge and the buildx job did not succeed: $BUILDX_RESULT" >&2
+          exit 1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        if: env.ACT == '' && steps.prep.outputs.push == 'true'
+        with:
+          version: latest
+          driver-opts: network=host
+      - name: Login to DockerHub
+        uses: docker/login-action@v4
+        if: env.ACT == '' && steps.prep.outputs.login-dockerhub == 'true'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        if: env.ACT == '' && steps.prep.outputs.login-ghcr == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        if: env.ACT == '' && steps.prep.outputs.push == 'true'
+        with:
+          pattern: docker-digest-python${{ matrix.python-version }}-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+      - name: Validate digests
+        id: digests
+        if: env.ACT == '' && steps.prep.outputs.push == 'true'
+        shell: bash
+        run: |
+          digest_dir='${{ runner.temp }}/digests'
+          read -ra architectures <<< "$ARCHITECTURES"
+          mapfile -t digest_files < <(find "$digest_dir" -maxdepth 1 -type f -print)
+          if [ "${#digest_files[@]}" -ne "${#architectures[@]}" ]; then
+            echo "Expected ${#architectures[@]} digest artifacts, found ${#digest_files[@]}" >&2
+            exit 1
+          fi
+          digests=()
+          for architecture in "${architectures[@]}"; do
+            digest_file="$digest_dir/$architecture"
+            if [ ! -f "$digest_file" ]; then
+              echo "Missing $architecture digest artifact" >&2
+              exit 1
+            fi
+            digest="$(<"$digest_file")"
+            if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Invalid $architecture digest: $digest" >&2
+              exit 1
+            fi
+            digests+=("$digest")
+          done
+          # two architectures resolving to the same digest means a leg built for the wrong platform
+          if [ "$(printf '%s\n' "${digests[@]}" | sort -u | wc -l)" -ne "${#digests[@]}" ]; then
+            echo 'Expected one distinct digest per architecture, got:' >&2
+            printf '%s\n' "${digests[@]}" >&2
+            exit 1
+          fi
+          printf 'digests=%s\n' "${digests[*]}" >> "$GITHUB_OUTPUT"
+      - name: Create multi-platform manifests
+        if: env.ACT == '' && steps.prep.outputs.push == 'true'
+        shell: bash
+        env:
+          DIGESTS: ${{ steps.digests.outputs.digests }}
+          REPOSITORIES: ${{ steps.prep.outputs.repositories }}
+          TAGS: ${{ steps.prep.outputs.tags }}
+        run: |
+          read -ra digests <<< "$DIGESTS"
+          IFS=',' read -ra repositories <<< "$REPOSITORIES"
+          IFS=',' read -ra tags <<< "$TAGS"
+          for repository in "${repositories[@]}"; do
+            tag_arguments=()
+            for tag in "${tags[@]}"; do
+              if [ "${tag%:*}" = "$repository" ]; then
+                tag_arguments+=(--tag "$tag")
+              fi
+            done
+            if [ "${#tag_arguments[@]}" -eq 0 ]; then
+              echo "No tags found for repository $repository" >&2
+              exit 1
+            fi
+            references=()
+            for digest in "${digests[@]}"; do
+              references+=("$repository@$digest")
+            done
+            docker buildx imagetools create "${tag_arguments[@]}" "${references[@]}"
+          done
+      - name: Inspect multi-platform manifests
+        if: env.ACT == '' && steps.prep.outputs.push == 'true'
+        shell: bash
+        env:
+          REPOSITORIES: ${{ steps.prep.outputs.repositories }}
+          VERSION: ${{ steps.prep.outputs.version }}
+        run: |
+          # every architecture we build is a plain, variant-less linux platform, so the platform string is just
+          # `linux/<architecture>`. a variant such as `linux/arm/v7` would need its own mapping here
+          read -ra architectures <<< "$ARCHITECTURES"
+          expected_platforms="$(printf 'linux/%s\n' "${architectures[@]}" | sort)"
+          IFS=',' read -ra repositories <<< "$REPOSITORIES"
+          for repository in "${repositories[@]}"; do
+            platforms="$(
+              docker buildx imagetools inspect "$repository:$VERSION" --raw |
+                jq -r '
+                  [
+                    .manifests[]?.platform
+                    | select(.os != "unknown" or .architecture != "unknown")
+                    | "\(.os)/\(.architecture)"
+                  ]
+                  | unique
+                  | .[]
+                '
+            )"
+            if [ "$platforms" != "$expected_platforms" ]; then
+              echo "Unexpected platforms for $repository:$VERSION" >&2
+              printf 'Expected:\n%s\nActual:\n%s\n' "$expected_platforms" "$platforms" >&2
+              exit 1
+            fi
+          done
       - name: Slack Notification
-        if: ${{ steps.prep.outputs.slack-notification-version && steps.prep_base_version.outputs.disable-slack-notification == 'false' && job.status == 'success' }}
+        if: env.ACT == '' && steps.prep.outputs.push == 'true' && steps.prep.outputs.slack-notification-version && steps.prep.outputs.disable-slack-notification == 'false' && success()
         uses: rtCamp/action-slack-notify@28e8b353eabda5998a2e1203aed33c5999944779
         env:
           SLACK_COLOR: ${{ job.status }} # It can turn the job status into a color. Success will be green.
