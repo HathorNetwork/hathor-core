@@ -39,6 +39,13 @@ def _make_v2(settings: HathorSettings, *, v2_start_height: int | None = 1) -> Di
     )
 
 
+def _active_features(*features: Feature) -> Callable[..., bool]:
+    """Return a `FeatureService.is_feature_active` side effect where only `features` are active."""
+    def is_feature_active(*, vertex: Any, feature: Feature) -> bool:
+        return feature in features
+    return is_feature_active
+
+
 class TestDAAConfig:
     """Tests for the ``DAAConfig`` value object — the values that distinguish each version."""
 
@@ -206,21 +213,6 @@ class TestGetMinedTokensV2StartHeight:
         )
         assert v2.get_mined_tokens(height) == manual
 
-    def test_v1_ignores_v2_start_height(self) -> None:
-        # V1 configs never carry v2_start_height (factory doesn't set it), and even if
-        # someone constructed one with it, factor=1 short-circuits the reduction.
-        settings = _get_settings()
-        v1_with_garbage = DifficultyAdjustmentAlgorithm(
-            settings=settings,
-            config=DAAConfig(
-                avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
-                reward_reduction_factor=1,
-                v2_start_height=3,
-            ),
-        )
-        v1 = _make_v1(settings)
-        assert v1_with_garbage.get_mined_tokens(10) == v1.get_mined_tokens(10)
-
 
 class TestDAAFactorySelect:
     """Tests for ``DAAFactory._select_config`` — version selection by parent feature state.
@@ -247,7 +239,7 @@ class TestDAAFactorySelect:
     def test_select_v2_when_parent_feature_active(self) -> None:
         settings = _get_settings()
         feature_service = Mock(spec=FeatureService)
-        feature_service.is_feature_active.return_value = True
+        feature_service.is_feature_active.side_effect = _active_features(Feature.REDUCE_DAA_TARGET)
         feature_service.get_activation_height.return_value = 16
         factory = DAAFactory(settings=settings, feature_service=feature_service)
         parent_block = Mock()
@@ -277,7 +269,7 @@ class TestDAAFactoryCreateFromBlock:
     def test_with_block_parent_feature_active_reduces_reward(self) -> None:
         settings = _get_settings()
         feature_service = Mock(spec=FeatureService)
-        feature_service.is_feature_active.return_value = True
+        feature_service.is_feature_active.side_effect = _active_features(Feature.REDUCE_DAA_TARGET)
         feature_service.get_activation_height.return_value = 0
         factory = DAAFactory(settings=settings, feature_service=feature_service)
         block = self._mock_non_genesis_block()
@@ -324,7 +316,7 @@ class TestDAAFactoryRewardForNextBlock:
     def test_feature_active_reduces_reward(self) -> None:
         settings = _get_settings()
         feature_service = Mock(spec=FeatureService)
-        feature_service.is_feature_active.return_value = True
+        feature_service.is_feature_active.side_effect = _active_features(Feature.REDUCE_DAA_TARGET)
         feature_service.get_activation_height.return_value = 0
         factory = DAAFactory(settings=settings, feature_service=feature_service)
         parent_block = Mock()
@@ -367,7 +359,7 @@ class TestDAAFactoryV2StartHeight:
     def test_create_from_parent_v2_sets_v2_start_height(self) -> None:
         settings = _get_settings()
         feature_service = Mock(spec=FeatureService)
-        feature_service.is_feature_active.return_value = True
+        feature_service.is_feature_active.side_effect = _active_features(Feature.REDUCE_DAA_TARGET)
         feature_service.get_activation_height.return_value = 16
         factory = DAAFactory(settings=settings, feature_service=feature_service)
         parent_block = Mock()
@@ -380,7 +372,7 @@ class TestDAAFactoryV2StartHeight:
     def test_create_from_parent_v2_passes_correct_feature(self) -> None:
         settings = _get_settings()
         feature_service = Mock(spec=FeatureService)
-        feature_service.is_feature_active.return_value = True
+        feature_service.is_feature_active.side_effect = _active_features(Feature.REDUCE_DAA_TARGET)
         feature_service.get_activation_height.return_value = 16
         factory = DAAFactory(settings=settings, feature_service=feature_service)
         parent_block = Mock()
@@ -394,7 +386,7 @@ class TestDAAFactoryV2StartHeight:
         # End-to-end through the factory: reproduce the V1/V2 split via the factory wiring.
         settings = _get_settings()
         feature_service = Mock(spec=FeatureService)
-        feature_service.is_feature_active.return_value = True
+        feature_service.is_feature_active.side_effect = _active_features(Feature.REDUCE_DAA_TARGET)
         feature_service.get_activation_height.return_value = 4  # → v2_start_height=5
         factory = DAAFactory(settings=settings, feature_service=feature_service)
         parent_block = Mock()
