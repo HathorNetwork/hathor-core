@@ -10,7 +10,7 @@ SPDX-License-Identifier: Apache-2.0
 This directory contains a miscellany of documents of Hathor core.
 
 Hathor core documentation is distributed over the following locations:
-- For users: [Hathor full node at Hathor docs](https://docs.hathor.network/pathways/components/full-node).
+- For users: [Hathor core (full node) at Hathor docs](https://docs.hathor.network/pathways/components/core).
 - At the root of the `hathor-core` repository for default documents (license, readme, etc.).
 - [API documentation following Open API standard](../hathor_cli).
 - [RFCs](https://github.com/HathorNetwork/rfcs).
