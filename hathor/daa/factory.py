@@ -93,7 +93,7 @@ class DAAFactory:
     def create_from_parent(self, parent_block: Block) -> DifficultyAdjustmentAlgorithm:
         """Build a DAA with the version that applies to a block whose parent is `parent_block`.
 
-        Shape B semantics: V2 takes effect on the block AFTER the activation block.
+        Shape B semantics: V2 (and V3) take effect on the block AFTER the activation block.
 
         Production-only: requires ``feature_service`` to be wired, and ``parent_block``
         to carry static metadata. CLI/synthetic-block paths must call ``create_v1``
@@ -119,14 +119,28 @@ class DAAFactory:
             'create_from_block/create_from_parent require parent_block to carry static metadata; '
             'use create_v1() directly for synthetic blocks'
         )
-        if not self._feature_service.is_feature_active(vertex=parent_block, feature=Feature.REDUCE_DAA_TARGET):
-            return DAAConfig.for_v1(self._settings)
-        activation_height = self._feature_service.get_activation_height(
-            block=parent_block, feature=Feature.REDUCE_DAA_TARGET,
-        )
-        assert activation_height is not None, 'feature_service.is_feature_active=True must imply an activation height'
-        # Shape B: first V2 block is the one immediately after the activation block.
-        return DAAConfig.for_v2(self._settings, v2_start_height=activation_height + 1)
+        if self._feature_service.is_feature_active(vertex=parent_block, feature=Feature.RESTORE_DAA_TARGET):
+            # RESTORE_DAA_TARGET takes precedence over REDUCE_DAA_TARGET, which stays active forever.
+            # Shape B: first V3 block is the one immediately after the activation block.
+            v3_start_height = self._get_start_height(parent_block, Feature.RESTORE_DAA_TARGET)
+            assert v3_start_height is not None, 'is_feature_active=True must imply an activation height'
+            v2_start_height = self._get_start_height(parent_block, Feature.REDUCE_DAA_TARGET)
+            return DAAConfig.for_v3(self._settings, v2_start_height=v2_start_height, v3_start_height=v3_start_height)
+        if self._feature_service.is_feature_active(vertex=parent_block, feature=Feature.REDUCE_DAA_TARGET):
+            # Shape B: first V2 block is the one immediately after the activation block.
+            v2_start_height = self._get_start_height(parent_block, Feature.REDUCE_DAA_TARGET)
+            assert v2_start_height is not None, 'is_feature_active=True must imply an activation height'
+            return DAAConfig.for_v2(self._settings, v2_start_height=v2_start_height)
+        return DAAConfig.for_v1(self._settings)
+
+    def _get_start_height(self, parent_block: Block, feature: Feature) -> int | None:
+        """Return the height of the first block governed by `feature`, or None if it is not active.
+
+        Shape B: that is the block immediately after the activation block.
+        """
+        assert self._feature_service is not None
+        activation_height = self._feature_service.get_activation_height(block=parent_block, feature=feature)
+        return None if activation_height is None else activation_height + 1
 
     # Block-independent helpers — exposed on the factory so callers don't have to construct
     # a per-block DAA just to compute a value that doesn't depend on which version applies.
