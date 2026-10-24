@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import unittest
+from struct import error as StructError
 
 from hathorlib import Block, TokenCreationTransaction, Transaction
 from hathorlib.base_transaction import get_cls_from_tx_version, tx_or_block_from_bytes
@@ -147,6 +148,23 @@ class HathorCommonsTestCase(unittest.TestCase):
 
     def test_script_basics(self):
         create_output_script(decode_address('HVZjvL1FJ23kH3buGNuttVRsRKq66WHUVZ'))
+
+    def test_tx_or_block_from_bytes_too_short(self):
+        # `tx_or_block_from_bytes` reads the version from the second byte, so anything shorter than
+        # 2 bytes has no version to read. It must raise `StructError` like any other undecodable
+        # input, and not let a bare `IndexError` escape to the callers.
+
+        # `b'\x01'` carries a valid version value, so including it pins the guard to the length of
+        # `data` rather than to the version byte being unrecognized.
+        for data in [b'', b'\x00', b'\x01']:
+            with self.assertRaisesRegex(StructError, 'too short'):
+                tx_or_block_from_bytes(data)
+
+        # Two bytes is exactly long enough to hold the version, so it must fail further in. Pinning
+        # the message here keeps the guard from silently widening past the version field.
+        with self.assertRaises(StructError) as cm:
+            tx_or_block_from_bytes(b'\x00\x00')
+        self.assertNotIn('too short', str(cm.exception))
 
     def test_standard_tx(self):
         data = bytes.fromhex('0001000102000001e0e88216036e4e52872ba60a96df7570c3e29cc30eda6dd92ea0fd'

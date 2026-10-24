@@ -1211,6 +1211,26 @@ class TransactionTest(unittest.TestCase):
         self.assertEqual(len(self.tx_storage.indexes.addresses.get_from_address(output3_address_b58)), 1)
         self.assertEqual(len(self.tx_storage.indexes.addresses.get_from_address(new_address_b58)), 1)
 
+    def test_deserialize_too_short(self):
+        # `deserialize` reads the version from the second byte, so anything shorter than 2 bytes has
+        # no version to read. It must raise `StructError` like any other undecodable input, and not
+        # let a bare `IndexError` escape to the callers.
+        from struct import error as StructError
+
+        parser = self.manager.vertex_parser
+
+        # `b'\x01'` carries a valid version value, so including it pins the guard to the length of
+        # `data` rather than to the version byte being unrecognized.
+        for data in [b'', b'\x00', b'\x01']:
+            with self.assertRaisesRegex(StructError, 'too short'):
+                parser.deserialize(data)
+
+        # Two bytes is exactly long enough to hold the version, so it must fail further in. Pinning
+        # the message here keeps the guard from silently widening past the version field.
+        with self.assertRaises(StructError) as cm:
+            parser.deserialize(b'\x00\x00')
+        self.assertNotIn('too short', str(cm.exception))
+
     def test_sighash_cache(self):
         from unittest import mock
 

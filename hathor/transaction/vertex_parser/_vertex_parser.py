@@ -52,9 +52,15 @@ class VertexParser:
         return supported_headers[header_id]
 
     def deserialize(self, data: bytes, storage: TransactionStorage | None = None) -> BaseTransaction:
-        """Creates the correct tx subclass from a sequence of bytes."""
-        # version field takes up the second byte only
+        """Creates the correct tx subclass from a sequence of bytes.
+
+        Raise `StructError` when `data` is too short to hold the version field, or when the version
+        byte does not map to a supported vertex version.
+        """
         from hathor.transaction import TxVersion
+        # version field takes up the second byte only, so `data` must be at least that long
+        if len(data) < 2:
+            raise StructError('Invalid bytes to create transaction subclass: too short.')
         version = data[1]
         try:
             tx_version = TxVersion(version)
