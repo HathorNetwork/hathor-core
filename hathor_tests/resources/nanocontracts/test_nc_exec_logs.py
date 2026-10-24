@@ -30,7 +30,7 @@ class NCExecLogsResourceTest(BaseNCExecLogs):
         """)
 
         for _, vertex in artifacts.list:
-            assert self.manager.on_new_tx(vertex)
+            assert self.manager.vertex_handler.on_new_trusted_vertex(vertex)
 
         self.nc1 = artifacts.get_typed_vertex('nc1', Transaction)
         assert self.nc1.is_nano_contract()

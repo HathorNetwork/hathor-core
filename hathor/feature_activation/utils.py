@@ -50,7 +50,7 @@ class Features:
         }
 
     @staticmethod
-    def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
+    def for_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
         """Return information about each feature according to the state in the provided vertex."""
         feature_states = feature_service.get_feature_states(vertex=vertex)
         feature_settings = Features.get_settings(settings)
@@ -92,7 +92,7 @@ class Features:
         block, and restrictive features are always enabled. This means restrictive features are applied in
         mempool verification regardless of features states in the current best block.
         """
-        features = Features.from_vertex(settings=settings, feature_service=feature_service, vertex=best_block)
+        features = Features.for_vertex(settings=settings, feature_service=feature_service, vertex=best_block)
         return Features(
             # Restrictive features (hardcoded as enabled):
             count_checkdatasig_op=True,

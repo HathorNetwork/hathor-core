@@ -57,7 +57,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
     def _test_forbid_syntax(self, code: str, *, syntax_errors: tuple[str, ...]) -> None:
         blueprint = self._create_on_chain_blueprint(code)
         with self.assertRaises(InvalidNewTransaction) as cm:
-            self.manager.vertex_handler.on_new_relayed_vertex(blueprint)
+            self.manager.vertex_handler.on_new_trusted_vertex(blueprint)
         assert isinstance(cm.exception.__cause__, OCBInvalidScript)
         assert isinstance(cm.exception.__cause__.__cause__, SyntaxError)
         assert 'full validation failed: forbidden syntax' in cm.exception.args[0]
@@ -438,7 +438,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         code = 'x ++= 1'
         blueprint = self._create_on_chain_blueprint(code)
         with self.assertRaises(InvalidNewTransaction) as cm:
-            self.manager.vertex_handler.on_new_relayed_vertex(blueprint)
+            self.manager.vertex_handler.on_new_trusted_vertex(blueprint)
         assert isinstance(cm.exception.__cause__, OCBInvalidScript)
         assert isinstance(cm.exception.__cause__.__cause__, SyntaxError)
         assert cm.exception.args[0] == 'full validation failed: Could not correctly parse the script'
@@ -451,7 +451,7 @@ def Foo():
     pass
 ''')
         with self.assertRaises(InvalidNewTransaction) as cm:
-            self.manager.vertex_handler.on_new_relayed_vertex(blueprint)
+            self.manager.vertex_handler.on_new_trusted_vertex(blueprint)
         assert isinstance(cm.exception.__cause__, OCBInvalidScript)
         assert cm.exception.args[0] == 'full validation failed: Could not find a main Blueprint definition'
 
@@ -463,7 +463,7 @@ class Foo():
     pass
 ''')
         with self.assertRaises(InvalidNewTransaction) as cm:
-            self.manager.vertex_handler.on_new_relayed_vertex(blueprint)
+            self.manager.vertex_handler.on_new_trusted_vertex(blueprint)
         assert isinstance(cm.exception.__cause__, OCBInvalidScript)
         assert cm.exception.args[0] == 'full validation failed: exported Blueprint is not a Blueprint subclass'
 

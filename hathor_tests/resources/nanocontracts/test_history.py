@@ -132,7 +132,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
             timestamp=timestamp
         )
         self._fill_nc(nc, self.blueprint_id, 'initialize', [0], self.genesis_private_key)
-        self.assertTrue(self.manager.on_new_tx(nc))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(nc))
         add_new_block(self.manager)
         return nc
 
@@ -168,7 +168,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
             timestamp=timestamp
         )
         self._fill_nc(tx1, nc1.hash, 'set_a', [1], self.genesis_private_key)
-        self.assertTrue(self.manager.on_new_tx(tx1))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(tx1))
         add_new_block(self.manager)
 
         # Check both transactions belongs to nc1 history.

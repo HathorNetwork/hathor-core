@@ -72,7 +72,7 @@ class TestBfsRegression(unittest.TestCase):
 
         # add tx1 before a8, this way tx1 will continue in the mempool after the re-org triggered by a8
         artifacts.propagate_with(self.manager, up_to_before='a8')
-        self.manager.vertex_handler.on_new_relayed_vertex(tx1)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx1)
 
         # sanity check:
         assert not b7.get_metadata().validation.is_initial()
@@ -101,7 +101,7 @@ class TestBfsRegression(unittest.TestCase):
         self.tx_storage.get_transaction = patched_get_transaction  # type: ignore[method-assign]
 
         # add a8, this triggers a re-org such that tx1 is affected and the mempool is scanned for affected txs
-        self.manager.vertex_handler.on_new_relayed_vertex(a8)
+        self.manager.vertex_handler.on_new_relayed_block(a8)
 
         # sanity check:
         assert not b7.get_metadata().validation.is_initial()

@@ -263,8 +263,7 @@ class VerificationService:
         )
         self.verifiers.vertex.verify_parents(tx)
         self.verifiers.tx.verify_conflict(tx, params)
-        if params.reject_locked_reward:
-            self.verifiers.tx.verify_reward_locked(tx)
+        self.verifiers.tx.verify_reward_locked(tx)
 
     def _verify_token_creation_tx(self, tx: TokenCreationTransaction, params: VerificationParams) -> None:
         """ Run all validations as regular transactions plus validation on token info.

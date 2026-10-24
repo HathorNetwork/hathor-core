@@ -353,7 +353,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         ''')
 
         for node, vertex in artifacts.list:
-            assert self.manager.on_new_tx(vertex)
+            assert self.manager.vertex_handler.on_new_trusted_vertex(vertex)
 
         nc1, = artifacts.get_typed_vertices(['nc1'], Transaction)
         assert nc1.is_nano_contract()
@@ -418,7 +418,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         ''')
 
         for node, vertex in artifacts.list:
-            assert self.manager.on_new_tx(vertex)
+            assert self.manager.vertex_handler.on_new_trusted_vertex(vertex)
 
         nc1, = artifacts.get_typed_vertices(['nc1'], Transaction)
         assert nc1.is_nano_contract()

@@ -61,8 +61,8 @@ class DAGArtifacts:
         Use `up_to` to stop propagation after the specified node has been propagated. Alternatively, use `up_to_before`
         to stop right before propagating the specified node.
 
-        Propagations are performed using `VertexHandler._old_on_new_vertex()`, which bypasses mempool rules by default.
-        Set `new_relayed_vertex` to True to apply these rules during propagation.
+        Propagations use the trusted entry point (`on_new_trusted_vertex`), which does not apply the
+        mempool-entry restrictions, so arbitrary DAGs can be built and replayed.
         """
         found_begin = self._last_propagated is None
         found_end = False
@@ -74,7 +74,7 @@ class DAGArtifacts:
 
             if found_begin:
                 try:
-                    assert manager.vertex_handler.on_new_relayed_vertex(vertex)
+                    assert manager.vertex_handler.on_new_trusted_vertex(vertex)
                 except Exception as e:
                     raise Exception(f'failed on_new_tx({node.name})') from e
                 for step_fn in self._step_fns:
