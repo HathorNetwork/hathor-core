@@ -263,3 +263,28 @@ class BlueprintBuiltinResourceTest(_BaseResourceTest._ResourceTest):
             has_more=False,
             blueprints=[],
         )
+
+    async def test_non_hex_pagination(self) -> None:
+        # A non-hex `before`/`after` used to escape as an uncaught ValueError, returning HTTP 500.
+        for param in (b'before', b'after'):
+            response = await self.web.get('builtin', {
+                param: b'zz',
+            })
+            data = response.json_value()
+            assert response.responseCode == 400
+            assert data == dict(
+                success=False,
+                error='Invalid before/after parameter: not a valid hex string.',
+            )
+
+    async def test_whitespace_pagination(self) -> None:
+        # `bytes.fromhex` skips ASCII whitespace, so a blank-but-truthy value decodes to b''.
+        response = await self.web.get('builtin', {
+            b'after': b' ',
+        })
+        data = response.json_value()
+        assert response.responseCode == 400
+        assert data == dict(
+            success=False,
+            error='Invalid before/after parameter: not a valid hex string.',
+        )

@@ -11,7 +11,7 @@ from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
 from hathor.manager import HathorManager
 from hathor.nanocontracts import Blueprint
-from hathor.util import collect_n
+from hathor.util import bytes_from_hex, collect_n
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
 
@@ -64,7 +64,15 @@ class BlueprintBuiltinResource(Resource):
 
         sorted_bps = SortedKeyList(filtered_bps, key=lambda bp_id_and_class: bp_id_and_class[0])
         reverse = bool(params.before)
-        start_key = bytes.fromhex(params.before or params.after or '') or None
+        start_key: bytes | None = None
+        if params.before or params.after:
+            start_key = bytes_from_hex(params.before or params.after or '') or None
+            if start_key is None:
+                request.setResponseCode(400)
+                error_response = ErrorResponse(
+                    success=False, error='Invalid before/after parameter: not a valid hex string.'
+                )
+                return error_response.json_dumpb()
         bp_iter: Iterator[tuple[bytes, type[Blueprint]]] = sorted_bps.irange_key(
             min_key=None if reverse else start_key,
             max_key=start_key if reverse else None,
