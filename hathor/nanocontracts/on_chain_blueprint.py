@@ -34,7 +34,8 @@ logger = get_logger()
 # used to allow new versions of the serialization format in the future
 ON_CHAIN_BLUEPRINT_VERSION: int = 1
 
-# source compatibility with Python 3.11
+# source compatibility with Python 3.11, intentionally kept at 3.11 even though the node itself requires a newer
+# Python: it defines which on-chain blueprint sources are considered valid, so bumping it is a consensus change
 PYTHON_CODE_COMPAT_VERSION = (3, 11)
 
 # max compression level, used as default
