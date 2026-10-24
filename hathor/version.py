@@ -8,7 +8,7 @@ from typing import Optional
 
 from structlog import get_logger
 
-BASE_VERSION = '0.72.0'
+BASE_VERSION = '0.73.0'
 
 DEFAULT_VERSION_SUFFIX = "local"
 BUILD_VERSION_FILE_PATH = "./BUILD_VERSION"
