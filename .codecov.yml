@@ -36,6 +36,14 @@ coverage:
         flags:
           - htr-rs
 
+# The htr-core crate is an experimental partial Rust port; exclude it from coverage
+# measurement until it stabilizes so it doesn't drag the strict htr-rs flag below target.
+# htr-core-py is its PyO3 binding: its logic is exercised by the Python interop tests
+# (hathor_tests/p2p/rust_interop/), which the Rust llvm-cov run cannot see, so it is excluded too.
+ignore:
+  - "htr-rs/crates/htr-core/"
+  - "htr-rs/crates/htr-core-py/"
+
 flags:
   htr-rs:
     paths:
