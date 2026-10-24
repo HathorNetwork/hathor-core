@@ -158,12 +158,12 @@ class VertexExporter:
             # Create mint and melt authorities to be used by future transactions
             outputs.extend([
                 TxOutput(
-                    value=TxOutput.TOKEN_MINT_MASK,
+                    value=UnsignedAmount(TxOutput.TOKEN_MINT_MASK),
                     token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
                     script=self.get_next_p2pkh_script(),
                 ),
                 TxOutput(
-                    value=TxOutput.TOKEN_MELT_MASK,
+                    value=UnsignedAmount(TxOutput.TOKEN_MELT_MASK),
                     token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
                     script=self.get_next_p2pkh_script(),
                 ),
@@ -442,7 +442,7 @@ class VertexExporter:
                     vertex.tokens.append(token_id)
                 token_index = 1 + vertex.tokens.index(token_id)
 
-            entry = FeeHeaderEntry(token_index=token_index, amount=fee_amount)
+            entry = FeeHeaderEntry(token_index=token_index, amount=UnsignedAmount(fee_amount))
             entries.append(entry)
 
         fee_header = FeeHeader(
@@ -526,7 +526,7 @@ class VertexExporter:
             vertex.hash = self._settings.GENESIS_BLOCK_HASH
             vertex.timestamp = self._settings.GENESIS_BLOCK_TIMESTAMP
             txout = TxOutput(
-                value=self._settings.GENESIS_TOKEN_ATOMIC_UNITS,
+                value=UnsignedAmount(self._settings.GENESIS_TOKEN_ATOMIC_UNITS),
                 token_data=0,
                 script=self._settings.GENESIS_OUTPUT_SCRIPT
             )

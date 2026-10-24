@@ -315,7 +315,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     @property
     def sum_outputs(self) -> UnsignedAmount:
         """Sum of the value of the outputs"""
-        return sum(output.value for output in self.outputs if not output.is_token_authority())
+        return sum(
+            (output.value for output in self.outputs if not output.is_token_authority()),
+            start=UnsignedAmount.zero(),
+        )
 
     @property
     def shielded_outputs(self) -> list['ShieldedOutput']:

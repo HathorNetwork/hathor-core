@@ -18,6 +18,7 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
+from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
@@ -83,7 +84,7 @@ class UtxoSearchResource(Resource):
 
         # target amount parameter must be an integer
         try:
-            target_amount = parse_int(args['target_amount'])
+            target_amount = UnsignedAmount(parse_int(args['target_amount']))
         except ValueError as e:
             return json_dumpb({
                 'success': False,
