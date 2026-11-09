@@ -157,7 +157,7 @@ class HathorCommonsTestCase(unittest.TestCase):
         # `b'\x01'` carries a valid version value, so including it pins the guard to the length of
         # `data` rather than to the version byte being unrecognized.
         for data in [b'', b'\x00', b'\x01']:
-            with self.assertRaisesRegex(StructError, 'too short'):
+            with self.assertRaisesRegex(StructError, 'too short', msg=f'data={data!r}'):
                 tx_or_block_from_bytes(data)
 
         # Two bytes is exactly long enough to hold the version, so it must fail further in. Pinning

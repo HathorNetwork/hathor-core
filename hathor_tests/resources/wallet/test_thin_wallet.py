@@ -699,8 +699,8 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         for tx_hex in ['00', '']:
             response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx_hex})
             data = response.json_value()
-            self.assertFalse(data['success'])
-            self.assertEqual(data['return_code'], 'param_invalid_hex')
+            self.assertFalse(data['success'], msg=f'tx_hex={tx_hex!r}')
+            self.assertEqual(data['return_code'], 'param_invalid_hex', msg=f'tx_hex={tx_hex!r}')
 
     def test_send_tokens_invalid_json_body(self):
         # An empty or malformed body reaches the resource as raw bytes (not None); it must

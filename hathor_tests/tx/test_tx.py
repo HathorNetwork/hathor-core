@@ -4,6 +4,7 @@
 import base64
 import hashlib
 from math import isinf, isnan
+from struct import error as StructError
 from unittest.mock import Mock, patch
 
 import pytest
@@ -1215,14 +1216,12 @@ class TransactionTest(unittest.TestCase):
         # `deserialize` reads the version from the second byte, so anything shorter than 2 bytes has
         # no version to read. It must raise `StructError` like any other undecodable input, and not
         # let a bare `IndexError` escape to the callers.
-        from struct import error as StructError
-
         parser = self.manager.vertex_parser
 
         # `b'\x01'` carries a valid version value, so including it pins the guard to the length of
         # `data` rather than to the version byte being unrecognized.
         for data in [b'', b'\x00', b'\x01']:
-            with self.assertRaisesRegex(StructError, 'too short'):
+            with self.assertRaisesRegex(StructError, 'too short', msg=f'data={data!r}'):
                 parser.deserialize(data)
 
         # Two bytes is exactly long enough to hold the version, so it must fail further in. Pinning
