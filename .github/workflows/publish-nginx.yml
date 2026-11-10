@@ -30,6 +30,7 @@ jobs:
       contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
+      is_release: ${{ steps.version.outputs.is_release }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -42,9 +43,17 @@ jobs:
           python: '3.12'
           os: 'ubuntu-22.04'
 
+      # Only a final release tag (vX.Y.Z) moves `latest`. Pre-release tags such as
+      # v0.72.0-rc.1 publish their versioned configs and image only.
       - name: Extract version from tag
         id: version
-        run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+        run: |
+          echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Generate all nginx configs
         working-directory: extras/nginx_docker
@@ -84,6 +93,7 @@ jobs:
       contents: read
     env:
       VERSION: ${{ needs.build.outputs.version }}
+      PUSH_LATEST: ${{ needs.build.outputs.is_release }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -107,6 +117,7 @@ jobs:
         run: make upload-to-s3 VERSION="$VERSION" AWS_PROFILE_ARGS=""
 
       - name: Upload configs to S3 (latest)
+        if: needs.build.outputs.is_release == 'true'
         working-directory: extras/nginx_docker
         run: make upload-to-s3-as-latest VERSION="$VERSION" AWS_PROFILE_ARGS=""
 
@@ -122,7 +133,7 @@ jobs:
 
       - name: Build and push to ECR
         working-directory: extras/nginx_docker
-        run: make publish-aws-main-image VERSION="$VERSION"
+        run: make publish-aws-main-image VERSION="$VERSION" PUSH_LATEST="$PUSH_LATEST"
 
       # --- GCP Artifact Registries ---
 
@@ -139,7 +150,7 @@ jobs:
 
       - name: Build and push to standalone-fullnodes
         working-directory: extras/nginx_docker
-        run: make publish-standalone-fullnodes-image VERSION="$VERSION"
+        run: make publish-standalone-fullnodes-image VERSION="$VERSION" PUSH_LATEST="$PUSH_LATEST"
 
       # hathor-testnet
       - name: Authenticate to GCP (hathor-testnet)
@@ -154,7 +165,7 @@ jobs:
 
       - name: Build and push to hathor-testnet
         working-directory: extras/nginx_docker
-        run: make publish-hathor-testnet-image VERSION="$VERSION"
+        run: make publish-hathor-testnet-image VERSION="$VERSION" PUSH_LATEST="$PUSH_LATEST"
 
       # ekvilibro
       - name: Authenticate to GCP (ekvilibro)
@@ -169,4 +180,4 @@ jobs:
 
       - name: Build and push to ekvilibro
         working-directory: extras/nginx_docker
-        run: make publish-ekvilibro-image VERSION="$VERSION"
+        run: make publish-ekvilibro-image VERSION="$VERSION" PUSH_LATEST="$PUSH_LATEST"
