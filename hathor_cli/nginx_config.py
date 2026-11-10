@@ -12,6 +12,10 @@ from typing import Any, NamedTuple, Optional, TextIO
 
 BASE_PATH = os.path.join(os.path.dirname(__file__), 'nginx_files')
 
+# Idle timeout for nginx's kept-alive connections to the fullnode. It must stay below the fullnode's own HTTP idle
+# timeout (Twisted's default, 60 s), so nginx never reuses a connection the fullnode is closing.
+UPSTREAM_KEEPALIVE_TIMEOUT_SECONDS = 50
+
 
 def get_openapi(src_file: Optional[TextIO] = None) -> dict[str, Any]:
     """ Open and parse the json file or generate OpenAPI dict on-the-fly
@@ -397,9 +401,15 @@ limit_conn_zone $global_key zone=global__event_ws:32k;
 limit_conn_zone $per_ip_key zone=per_ip__event_ws:10m;
 '''
 
+    # nginx >= 1.29.7 keeps upstream connections alive by default, with a 60 s idle timeout. hathor-core's Twisted
+    # `Site` also closes idle connections after 60 s, so nginx could reuse a connection just as the fullnode closes
+    # it: nginx then logs "upstream prematurely closed connection" and answers non-idempotent requests (e.g.
+    # `POST /submit_block`, `POST /push_tx`) with a 502. Keeping nginx's idle timeout shorter makes nginx always
+    # close idle connections first. It does not limit how long a request may take.
     server_open = f'''
 upstream backend {{
     server 127.0.0.1:8080;
+    keepalive_timeout {UPSTREAM_KEEPALIVE_TIMEOUT_SECONDS}s;
 }}
 
 server {{
