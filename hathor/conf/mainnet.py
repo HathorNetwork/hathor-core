@@ -343,6 +343,24 @@ SETTINGS = HathorSettings(
                 version='0.70.0',
                 signal_support_by_default=True,
             ),
+            Feature.RESTORE_DAA_TARGET: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=1,
+                # Right now the best block is 7_376_046 at Wednesday, 2026-10-28 17:35 GMT.
+                # Restores the 30s block target and the full block reward after REDUCE_DAA_TARGET.
+                # Bit 1 is free since REDUCE_DAA_TARGET's window ended at 6_713_280.
+                # The window configured in v0.72.0 (start 7_257_600, minimum activation 7_398_720, timeout 7_539_840)
+                # assumed ~17.5s blocks, but mainnet sped up to ~7.5s blocks right after it was built, so it would
+                # have activated around 2026-10-30 instead of 2026-11-18. Only Hathor Labs nodes run v0.72.0, so the
+                # window is moved before anyone else updates. Heights now assume ~7.5s blocks (7.3s to 8.9s on average
+                # over the last 1k to 20k blocks).
+                start_height=7_398_720,  # expected around 2026-10-30 16:49 GMT
+                timeout_height=7_842_240,  # 22 intervals (~6 weeks), expected around 2026-12-08 04:49 GMT
+                minimum_activation_height=7_600_320,  # 10 intervals (~3 weeks), expected around 2026-11-17 04:49 GMT
+                lock_in_on_timeout=False,
+                version='0.72.1',
+                signal_support_by_default=True,
+            ),
         }
     )
 )
