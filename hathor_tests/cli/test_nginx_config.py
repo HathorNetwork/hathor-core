@@ -5,7 +5,7 @@ from io import StringIO
 
 import pytest
 
-from hathor_cli.nginx_config import generate_nginx_config
+from hathor_cli.nginx_config import UPSTREAM_KEEPALIVE_TIMEOUT_SECONDS, generate_nginx_config
 
 
 class TestGenerateNginxConfig:
@@ -287,3 +287,15 @@ class TestGenerateNginxConfig:
         assert 'upstream api_proxy {' not in config
         assert 'proxy_pass http://api_proxy;' not in config
         assert 'proxy_pass http://backend;' in config
+
+    def test_upstream_keepalive_timeout_is_below_fullnode_idle_timeout(self) -> None:
+        from twisted.web.http import _REQUEST_TIMEOUT
+
+        out = StringIO()
+        generate_nginx_config({'paths': {}}, out_file=out)
+        config = out.getvalue()
+
+        # nginx must close idle upstream connections before the fullnode does, or it can send a request on a
+        # connection the fullnode is closing, which ends in a 502 for non-idempotent requests
+        assert f'keepalive_timeout {UPSTREAM_KEEPALIVE_TIMEOUT_SECONDS}s;' in config
+        assert UPSTREAM_KEEPALIVE_TIMEOUT_SECONDS < _REQUEST_TIMEOUT
