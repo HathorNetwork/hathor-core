@@ -12,9 +12,11 @@ from typing import Any, NamedTuple, Optional, TextIO
 
 BASE_PATH = os.path.join(os.path.dirname(__file__), 'nginx_files')
 
-# Idle timeout for nginx's kept-alive connections to the fullnode. It must stay below the fullnode's own HTTP idle
-# timeout (Twisted's default, 60 s), so nginx never reuses a connection the fullnode is closing.
-UPSTREAM_KEEPALIVE_TIMEOUT_SECONDS = 50
+# Idle timeout for nginx's kept-alive connections to the fullnode. It must stay well below the fullnode's own HTTP
+# idle timeout (Twisted's default, 60 s), so nginx never reuses a connection the fullnode is closing. The margin is
+# wide on purpose: Twisted runs due timers before reading sockets, so after an event-loop stall longer than the
+# margin, the fullnode closes a connection nginx has already sent a request on.
+UPSTREAM_KEEPALIVE_TIMEOUT_SECONDS = 20
 
 
 def get_openapi(src_file: Optional[TextIO] = None) -> dict[str, Any]:
