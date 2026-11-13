@@ -121,12 +121,14 @@ AWS_MAIN_IMAGE_TAG_ARGS = --tag $(AWS_MAIN_REGISTRY):$(VERSION)
 STANDALONE_FULLNODES_IMAGE_TAG_ARGS = --tag $(STANDALONE_FULLNODES_REGISTRY):$(VERSION)
 HATHOR_TESTNET_IMAGE_TAG_ARGS = --tag $(HATHOR_TESTNET_REGISTRY):$(VERSION)
 EKVILIBRO_IMAGE_TAG_ARGS = --tag $(EKVILIBRO_REGISTRY):$(VERSION)
+HATHOR_TESTNET_SHIELDED_OUTPUTS_IMAGE_TAG_ARGS = --tag $(HATHOR_TESTNET_SHIELDED_OUTPUTS_REGISTRY):$(VERSION)
 
 ifeq ($(PUSH_LATEST),true)
 AWS_MAIN_IMAGE_TAG_ARGS += --tag $(AWS_MAIN_REGISTRY):$(DEFAULT_LATEST_TAG)
 STANDALONE_FULLNODES_IMAGE_TAG_ARGS += --tag $(STANDALONE_FULLNODES_REGISTRY):$(DEFAULT_LATEST_TAG)
 HATHOR_TESTNET_IMAGE_TAG_ARGS += --tag $(HATHOR_TESTNET_REGISTRY):$(DEFAULT_LATEST_TAG)
 EKVILIBRO_IMAGE_TAG_ARGS += --tag $(EKVILIBRO_REGISTRY):$(DEFAULT_LATEST_TAG)
+HATHOR_TESTNET_SHIELDED_OUTPUTS_IMAGE_TAG_ARGS += --tag $(HATHOR_TESTNET_SHIELDED_OUTPUTS_REGISTRY):$(DEFAULT_LATEST_TAG)
 endif
 
 .INTERMEDIATE: .aws-main-login.stamp
@@ -254,7 +256,7 @@ release: generate-all upload-to-s3 upload-to-s3-as-latest ## Generate and upload
 # ============================
 
 .PHONY: publish-images
-publish-images: publish-aws-main-image publish-standalone-fullnodes-image publish-hathor-testnet-image publish-ekvilibro-image ## Build and push the generic nginx image to all workflow registries (requires VERSION and prior registry auth)
+publish-images: publish-aws-main-image publish-standalone-fullnodes-image publish-hathor-testnet-image publish-ekvilibro-image publish-hathor-testnet-shielded-outputs-image ## Build and push the generic nginx image to all workflow registries (requires VERSION and prior registry auth)
 	@echo "Published generic nginx image to all workflow registries for $(VERSION)."
 
 .PHONY: publish-aws-main-image
@@ -288,6 +290,14 @@ ifndef VERSION
 endif
 	@echo "Building and pushing generic nginx image to Ekvilibro..."
 	$(call build_and_push_image,$(EKVILIBRO_IMAGE_TAG_ARGS))
+
+.PHONY: publish-hathor-testnet-shielded-outputs-image
+publish-hathor-testnet-shielded-outputs-image: ## Build and push the generic nginx image to hathor-testnet-shielded-output (requires VERSION and prior registry auth)
+ifndef VERSION
+	$(error VERSION is required. Usage: make publish-hathor-testnet-shielded-outputs-image VERSION=v0.69.0)
+endif
+	@echo "Building and pushing generic nginx image to Hathor Testnet Shielded Outputs..."
+	$(call build_and_push_image,$(HATHOR_TESTNET_SHIELDED_OUTPUTS_IMAGE_TAG_ARGS))
 
 # Generate nginx.conf only (for testing or manual use).
 # Usage:
@@ -347,6 +357,7 @@ help:
 	@echo "  publish-standalone-fullnodes-image  - Build and push the generic nginx image to Standalone Fullnodes"
 	@echo "  publish-hathor-testnet-image        - Build and push the generic nginx image to Hathor Testnet"
 	@echo "  publish-ekvilibro-image             - Build and push the generic nginx image to Ekvilibro"
+	@echo "  publish-hathor-testnet-shielded-outputs-image - Build and push the generic nginx image to Hathor Testnet Shielded Outputs"
 	@echo ""
 	@echo "Utility Commands:"
 	@echo "  nginx.conf                - Generate nginx.conf only (use NGINX_ARGS for extra options)"
