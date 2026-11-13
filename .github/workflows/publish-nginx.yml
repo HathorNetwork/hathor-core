@@ -1,0 +1,208 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
+# yamllint disable rule:line-length
+name: publish-nginx
+# Publishes the nginx configs and the generic nginx image:
+# - on every v* tag, as version <tag>;
+# - on pushes to master that change the config generator or the image, as version
+#   master-<short sha>, so that fullnodes can use a config change before the next release;
+# - on a manual run from master (or a tag), for example to publish a config built by a
+#   master commit that the path filter skipped.
+# Only a final release tag (vX.Y.Z) moves `latest`.
+on: # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+    # GitHub ignores path filters for tag pushes, so every v* tag still publishes.
+    paths:
+      - .github/workflows/publish-nginx.yml
+      - extras/nginx_docker/**
+      - hathor_cli/nginx_config.py
+  workflow_dispatch:
+
+# Never cancel a running publish: a cancelled run leaves a partial version in S3.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SF_PROJECT_NUMBER: '840538782933'   # standalone-fullnodes
+  HT_PROJECT_NUMBER: '479738554605'   # hathor-testnet
+  EKV_PROJECT_NUMBER: '292005442741'  # ekvilibro
+
+jobs:
+  # Build job: generates the nginx configs and uploads them as an artifact.
+  # It runs the project's virtualenv (poetry/python), so it deliberately has NO
+  # cloud credentials (no id-token) — a poisoned cache or dependency here cannot
+  # reach the deploy role.
+  build:
+    name: Build nginx configs
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_release: ${{ steps.version.outputs.is_release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-hathor-env
+        name: Setup Hathor node environment
+        with:
+          python: '3.12'
+          os: 'ubuntu-22.04'
+
+      # A tag publishes as the tag name; master publishes as master-<short sha>.
+      # Only a final release tag (vX.Y.Z) moves `latest`. Pre-release tags such as
+      # v0.72.0-rc.1 and master builds publish their versioned configs and image only.
+      - name: Compute version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            version="${GITHUB_REF_NAME}"
+          elif [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
+            version="master-${GITHUB_SHA::7}"
+          else
+            echo "::error::publish-nginx runs only on v* tags and on master, not on ${GITHUB_REF}."
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate all nginx configs
+        working-directory: extras/nginx_docker
+        run: poetry run make generate-all VERSION="$VERSION"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Generate set_real_ip_from_cloudfront
+        working-directory: extras/nginx_docker
+        run: make set_real_ip_from_cloudfront
+
+      - name: Upload generated configs artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nginx-configs
+          path: |
+            extras/nginx_docker/dist/
+            extras/nginx_docker/set_real_ip_from_cloudfront
+          if-no-files-found: error
+          retention-days: 1
+
+  # Deploy job: consumes the build artifact and pushes it to S3 and the
+  # container registries. This is the only job that assumes the cloud roles
+  # (id-token: write + the publish-nginx environment). It never runs the
+  # project's virtualenv, so no build-time code executes with these credentials.
+  deploy:
+    name: Release nginx configs and image
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    # This environment is tied to the AWS Role assumed by this workflow.
+    # The Role will only allow to be assumed if the workflow is set with this environment.
+    # We also have additional protection rules on this environment to require a review before running.
+    environment: publish-nginx
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      PUSH_LATEST: ${{ needs.build.outputs.is_release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Download generated configs artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nginx-configs
+          path: extras/nginx_docker
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
+        with:
+          role-to-assume: arn:aws:iam::769498303037:role/GitHubActionsNginxConfigUploadRole
+          aws-region: us-east-1
+
+      - name: Upload configs to S3 (versioned)
+        working-directory: extras/nginx_docker
+        run: make upload-to-s3 VERSION="$VERSION" AWS_PROFILE_ARGS=""
+
+      - name: Upload configs to S3 (latest)
+        if: needs.build.outputs.is_release == 'true'
+        working-directory: extras/nginx_docker
+        run: make upload-to-s3-as-latest VERSION="$VERSION" AWS_PROFILE_ARGS=""
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      # --- AWS ECR ---
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2
+
+      - name: Build and push to ECR
+        working-directory: extras/nginx_docker
+        run: make publish-aws-main-image VERSION="$VERSION" PUSH_LATEST="$PUSH_LATEST"
+
+      # --- GCP Artifact Registries ---
+
+      # standalone-fullnodes
+      - name: Authenticate to GCP (standalone-fullnodes)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: projects/${{ env.SF_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
+          service_account: ''
+        id: gcp-auth-sf
+
+      - name: Configure Docker for Artifact Registry (standalone-fullnodes)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to standalone-fullnodes
+        working-directory: extras/nginx_docker
+        run: make publish-standalone-fullnodes-image VERSION="$VERSION" PUSH_LATEST="$PUSH_LATEST"
+
+      # hathor-testnet
+      - name: Authenticate to GCP (hathor-testnet)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: projects/${{ env.HT_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
+          service_account: ''
+        id: gcp-auth-ht
+
+      - name: Configure Docker for Artifact Registry (hathor-testnet)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to hathor-testnet
+        working-directory: extras/nginx_docker
+        run: make publish-hathor-testnet-image VERSION="$VERSION" PUSH_LATEST="$PUSH_LATEST"
+
+      # ekvilibro
+      - name: Authenticate to GCP (ekvilibro)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: projects/${{ env.EKV_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
+          service_account: ''
+        id: gcp-auth-ekv
+
+      - name: Configure Docker for Artifact Registry (ekvilibro)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to ekvilibro
+        working-directory: extras/nginx_docker
+        run: make publish-ekvilibro-image VERSION="$VERSION" PUSH_LATEST="$PUSH_LATEST"
