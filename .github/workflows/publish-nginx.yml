@@ -108,6 +108,7 @@ jobs:
     name: Release nginx configs and image
     needs: build
     runs-on: ubuntu-22.04
+    cache-mode: none  # this job uses no cache: never restore or save one
     timeout-minutes: 30
     # This environment is tied to the AWS Role assumed by this workflow.
     # The Role will only allow to be assumed if the workflow is set with this environment.

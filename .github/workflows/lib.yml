@@ -11,6 +11,9 @@ on: # yamllint disable-line rule:truthy
     tags:
       - v*
   pull_request:
+# No job in this workflow uses a cache: never restore or save one.
+cache-mode: none
+
 jobs:
   test:
     name: python-${{ matrix.python }} (${{ matrix.os }})

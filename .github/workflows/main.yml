@@ -17,6 +17,7 @@ concurrency:
 jobs:
   matrix:
     runs-on: ubuntu-latest
+    cache-mode: none  # this job uses no cache: never restore or save one
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -44,6 +45,7 @@ jobs:
             f.write('matrix={}\n'.format(json.dumps(matrix)))
   check-matrix:
     runs-on: ubuntu-latest
+    cache-mode: none  # this job uses no cache: never restore or save one
     needs: matrix
     steps:
       - name: Install json2yaml
@@ -58,6 +60,7 @@ jobs:
   uv-check:
     name: uv-check py3.13 (ubuntu-22.04)
     runs-on: ubuntu-22.04
+    cache-mode: none  # this job uses no cache: never restore or save one
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -85,6 +88,7 @@ jobs:
   reuse:
     name: reuse
     runs-on: ubuntu-latest
+    cache-mode: none  # this job uses no cache: never restore or save one
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -209,6 +213,7 @@ jobs:
   all-checks:
     name: all-checks
     runs-on: ubuntu-latest
+    cache-mode: none  # this job uses no cache: never restore or save one
     if: always()
     needs: [lint, reuse, test-cli, test-lib, test-other, uv-check]
     steps:

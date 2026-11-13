@@ -49,6 +49,7 @@ jobs:
 
   fmt:
     runs-on: ubuntu-latest
+    cache-mode: none  # this job uses no cache: never restore or save one
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -105,6 +106,7 @@ jobs:
 
   sort:
     runs-on: ubuntu-latest
+    cache-mode: none  # this job uses no cache: never restore or save one
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -117,6 +119,7 @@ jobs:
 
   audit:
     runs-on: ubuntu-latest
+    cache-mode: none  # this job uses no cache: never restore or save one
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
