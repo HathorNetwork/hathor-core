@@ -113,7 +113,8 @@ AWS_MAIN_REGION ?= us-east-1
 AWS_MAIN_PROFILE ?= hathor-network
 
 # Set PUSH_LATEST=false to push only the $(VERSION) tag. CI does this for pre-release
-# tags (e.g. v0.72.0-rc.1), so that a release candidate never replaces the `latest` image.
+# tags (e.g. v0.72.0-rc.1) and master builds (e.g. master-d84dea2), so that only a final
+# release replaces the `latest` image.
 PUSH_LATEST ?= true
 
 AWS_MAIN_IMAGE_TAG_ARGS = --tag $(AWS_MAIN_REGISTRY):$(VERSION)

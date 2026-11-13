@@ -3,14 +3,30 @@
 
 # yamllint disable rule:line-length
 name: publish-nginx
+# Publishes the nginx configs and the generic nginx image:
+# - on every v* tag, as version <tag>;
+# - on pushes to master that change the config generator or the image, as version
+#   master-<short sha>, so that fullnodes can use a config change before the next release;
+# - on a manual run from master (or a tag), for example to publish a config built by a
+#   master commit that the path filter skipped.
+# Only a final release tag (vX.Y.Z) moves `latest`.
 on: # yamllint disable-line rule:truthy
   push:
+    branches:
+      - master
     tags:
       - v*
+    # GitHub ignores path filters for tag pushes, so every v* tag still publishes.
+    paths:
+      - .github/workflows/publish-nginx.yml
+      - extras/nginx_docker/**
+      - hathor_cli/nginx_config.py
+  workflow_dispatch:
 
+# Never cancel a running publish: a cancelled run leaves a partial version in S3.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   SF_PROJECT_NUMBER: '840538782933'   # standalone-fullnodes
@@ -43,13 +59,22 @@ jobs:
           python: '3.12'
           os: 'ubuntu-22.04'
 
+      # A tag publishes as the tag name; master publishes as master-<short sha>.
       # Only a final release tag (vX.Y.Z) moves `latest`. Pre-release tags such as
-      # v0.72.0-rc.1 publish their versioned configs and image only.
-      - name: Extract version from tag
+      # v0.72.0-rc.1 and master builds publish their versioned configs and image only.
+      - name: Compute version
         id: version
         run: |
-          echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          if [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            version="${GITHUB_REF_NAME}"
+          elif [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
+            version="master-${GITHUB_SHA::7}"
+          else
+            echo "::error::publish-nginx runs only on v* tags and on master, not on ${GITHUB_REF}."
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "is_release=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_release=false" >> "$GITHUB_OUTPUT"
