@@ -483,7 +483,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
         genesis_hash = genesis_block.hash
         assert genesis_hash is not None
         deposit_input = [TxInput(genesis_hash, 0, b'')]
-        change_output = TxOutput((genesis_block.outputs[0].value - deposit_amount), script, 0)
+        change_output = TxOutput((genesis_block.outputs[0].value - deposit_amount).to_v1(), script, 0)
         parents = [tx.hash for tx in genesis_txs]
         timestamp = int(manager.reactor.seconds())
     else:
@@ -608,12 +608,12 @@ def create_fee_tokens(
     outputs.append(TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001))
 
     # fee
-    fee = settings.FEE_PER_OUTPUT_V1
+    fee = UnsignedAmount.from_v1(settings.FEE_PER_OUTPUT_V1)
 
     # fee output
     fee_output_raw = (
-        genesis_block.outputs[0].value
-        - fee
+        genesis_block.outputs[0].value.raw()
+        - fee.raw()
         - (genesis_output_amount or 0)
     )
     outputs.append(TxOutput(UnsignedAmount.from_v1(fee_output_raw), script, 0))

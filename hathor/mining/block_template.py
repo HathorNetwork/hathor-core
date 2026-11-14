@@ -104,7 +104,7 @@ class BlockTemplate(NamedTuple):
     def from_dict(cls, data: dict) -> 'BlockTemplate':
         return cls(
             versions=set(data['versions']),
-            reward=int(data['reward']),
+            reward=UnsignedAmount(int(data['reward'])),
             weight=float(data['weight']),
             timestamp_now=int(data['timestamp_now']),
             timestamp_min=int(data['timestamp_min']),

@@ -258,7 +258,7 @@ def decode_output_value_v1(deserializer: Deserializer, *, strict: bool = True) -
         raise ValueError('Number must be strictly positive')
     if value <= MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
         raise ValueError('Value fits in 4 bytes but is using 8 bytes')
-    return value
+    return UnsignedAmount.from_v1(value)
 
 
 def decode_output_value_v2(deserializer: Deserializer, *, strict: bool = True) -> UnsignedAmount:
@@ -319,7 +319,8 @@ def decode_output_value_v2(deserializer: Deserializer, *, strict: bool = True) -
     >>> decode_output_value_v2(build('03 c0ffee')) == 0xc0ffee
     True
     """
-    return decode_length_prefix_varint(deserializer, strict=strict, max_value=MAX_OUTPUT_VALUE_V2)
+    value = decode_length_prefix_varint(deserializer, strict=strict, max_value=MAX_OUTPUT_VALUE_V2)
+    return UnsignedAmount.from_v2(value)
 
 
 def decode_length_prefix_varint(deserializer: Deserializer, *, strict: bool, max_value: int | None = None) -> int:
