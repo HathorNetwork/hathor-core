@@ -5,12 +5,15 @@
 Module for mining websocket API discussed at https://github.com/HathorNetwork/hathor-core/issues/91
 """
 
+from inspect import iscoroutine
 from json import JSONDecodeError
 from typing import Any, NamedTuple, Optional, Union
 
 from autobahn.twisted.websocket import WebSocketServerFactory, WebSocketServerProtocol
 from autobahn.websocket import ConnectionRequest
 from structlog import get_logger
+from twisted.internet.defer import Deferred, ensureDeferred
+from twisted.python.failure import Failure
 
 from hathor.manager import HathorManager
 from hathor.pubsub import EventArguments, HathorEvents
@@ -79,7 +82,6 @@ class JsonRpcWebsocketServerProtocol(WebSocketServerProtocol):
         except AttributeError:
             return self.send_response(error=JSON_RPC_METHOD_NOT_FOUND)
         try:
-            # TODO: could be made async, right now no method needs it
             # TODO: could be changed into a design that allows for no response from a call
             if isinstance(params, list):
                 result = method(*params)
@@ -89,9 +91,22 @@ class JsonRpcWebsocketServerProtocol(WebSocketServerProtocol):
                 raise TypeError('params has to be list, dict or null')
         except TypeError:
             return self.send_response(error=JSON_RPC_INVALID_PARAMS)
+        # A do_ method may be a coroutine (e.g. a possibly-delayed block submission), in which
+        # case we run it on the reactor and respond once it completes instead of synchronously.
+        if iscoroutine(result):
+            result = ensureDeferred(result)
+        if isinstance(result, Deferred):
+            if id is not None:
+                result.addCallback(lambda value: self.send_response(result=value, id=id))
+                result.addErrback(self._handle_request_error, id)
+            return
         # XXX: don't respond to notifications
         if id is not None:
             self.send_response(result=result, id=id)
+
+    def _handle_request_error(self, failure: Failure, id: JsonRpcId) -> None:
+        self.log.warn('internal error', failure=failure)
+        self.send_response(error=JSON_RPC_INTERNAL_ERROR, id=id)
 
     def send_response(self, *,
                       id: Optional[JsonRpcId] = None,
@@ -155,7 +170,7 @@ class MiningWebsocketProtocol(JsonRpcWebsocketServerProtocol):
             return []
         return self.factory.get_block_templates()
 
-    def do_mining_submit(self, hexdata: str, optimistic: bool = False) -> Union[bool, dict]:
+    async def do_mining_submit(self, hexdata: str, optimistic: bool = False) -> Union[bool, dict]:
         if not self.factory.manager.can_start_mining():
             self.log.warn('node syncing')
             return False
@@ -167,9 +182,9 @@ class MiningWebsocketProtocol(JsonRpcWebsocketServerProtocol):
         if not tx.is_block:
             self.log.warn('expected Block, received Transaction', data=hexdata)
             return False
-        res = self.factory.manager.submit_block(tx)
+        res = await self.factory.manager.asubmit_block(tx)
         if res and optimistic:
-            return self.manager.make_block_template(tx.hash).to_dict()
+            return self.factory.manager.make_block_template(tx.hash).to_dict()
         return res
 
 
