@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
+[profile.default.slow-timeout]
+period = "10s"
+terminate-after = 2
+grace-period = "5s"

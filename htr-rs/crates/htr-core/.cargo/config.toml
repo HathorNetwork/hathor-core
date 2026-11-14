@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
+[build]
+rustflags = ["-C", "target-cpu=native"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
+[alias]
+dev-check = "check --all-targets --no-default-features -F crypto-aws-lc,crypto-graviola,crypto-openssl"
+dev-test = "nextest run --no-default-features -F crypto-aws-lc,crypto-graviola,crypto-openssl --no-fail-fast"
+dev-clippy = "clippy --all-targets --no-default-features -F crypto-aws-lc,crypto-graviola,crypto-openssl"
+dev-run = "run --no-default-features -F crypto-aws-lc"
+dev-run2 = "run --no-default-features -F crypto-ring"
