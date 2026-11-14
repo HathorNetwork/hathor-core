@@ -22,7 +22,6 @@ jobs:
     strategy:
       matrix:
         python:
-          - "3.11"
           - "3.12"
         os:
           - ubuntu-22.04
@@ -45,4 +44,4 @@ jobs:
         continue-on-error: ${{ matrix.tier > 1 }}
       - name: Upload coverage
         uses: codecov/codecov-action@29386c70ef20e286228c72b668a06fd0e8399192 # https://github.com/codecov/codecov-action/releases/tag/v1
-        if: matrix.python == 3.11 && startsWith(matrix.os, 'ubuntu')
+        if: matrix.python == 3.12 && startsWith(matrix.os, 'ubuntu')
