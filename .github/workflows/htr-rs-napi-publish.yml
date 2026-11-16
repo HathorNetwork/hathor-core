@@ -30,6 +30,9 @@ defaults:
   run:
     working-directory: htr-rs/crates/htr-lib-napi
 
+# No job in this workflow uses a cache: never restore or save one.
+cache-mode: none
+
 jobs:
   build:
     name: Build ${{ matrix.settings.target }}
