@@ -196,6 +196,19 @@ class StratumJobTest(_BaseStratumTest):
         self._submit(self.job['job_id'], nonce)
         self.assertIn('result', self._get_latest_message())
 
+    def test_valid_solution_with_submission_delay(self):
+        self.manager.mining_submission_delay = 2
+        nonce = self._get_nonce()
+        self._submit(self.job['job_id'], nonce)
+
+        # the miner is answered immediately, even though block processing is deferred
+        self.assertIn('result', self._get_latest_message())
+        self.assertEqual(self.protocol.blocks_found, 0)
+
+        # advancing the manager's reactor lets the deferred submission run
+        self.clock.advance(2)
+        self.assertEqual(self.protocol.blocks_found, 1)
+
     def test_force_propagation_failure(self):
         nonce = self._get_nonce()
         current_job = self.protocol.current_job
