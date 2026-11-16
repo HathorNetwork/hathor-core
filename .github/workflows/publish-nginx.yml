@@ -32,6 +32,7 @@ env:
   SF_PROJECT_NUMBER: '840538782933'   # standalone-fullnodes
   HT_PROJECT_NUMBER: '479738554605'   # hathor-testnet
   EKV_PROJECT_NUMBER: '292005442741'  # ekvilibro
+  HTSO_PROJECT_NUMBER: '302045325431' # hathor-testnet-shielded-output
 
 jobs:
   # Build job: generates the nginx configs and uploads them as an artifact.
@@ -206,3 +207,18 @@ jobs:
       - name: Build and push to ekvilibro
         working-directory: extras/nginx_docker
         run: make publish-ekvilibro-image VERSION="$VERSION" PUSH_LATEST="$PUSH_LATEST"
+
+      # hathor-testnet-shielded-output
+      - name: Authenticate to GCP (hathor-testnet-shielded-output)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: projects/${{ env.HTSO_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
+          service_account: ''
+        id: gcp-auth-htso
+
+      - name: Configure Docker for Artifact Registry (hathor-testnet-shielded-output)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to hathor-testnet-shielded-output
+        working-directory: extras/nginx_docker
+        run: make publish-hathor-testnet-shielded-outputs-image VERSION="$VERSION" PUSH_LATEST="$PUSH_LATEST"
