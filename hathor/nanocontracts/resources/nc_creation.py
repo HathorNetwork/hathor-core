@@ -15,6 +15,7 @@ from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.resources.on_chain import SortOrder
 from hathor.nanocontracts.types import BlueprintId, VertexId
 from hathor.transaction import Transaction
+from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import bytes_from_hex, not_none
 from hathor.utils.api import ErrorResponse, QueryParams, Response
@@ -57,8 +58,9 @@ class NCCreationResource(Resource):
         if params.search:
             search = params.search.strip()
             maybe_bytes = bytes_from_hex(search)
-            if maybe_bytes is None:
-                # in this case we do have `search` but it's not a valid hex, so we return empty.
+            if maybe_bytes is None or len(maybe_bytes) != TX_HASH_SIZE:
+                # `search` is either a NC ID or a BP ID, so anything that isn't a valid hex of the
+                # right size can't match. It must not reach the indexes below, which assert on key size.
                 response = NCCreationResponse(
                     nc_creation_txs=[],
                     before=params.before,
