@@ -11,7 +11,8 @@ from hathorlib.utils import int_to_bytes, unpack, unpack_len
 # used to allow new versions of the serialization format in the future
 ON_CHAIN_BLUEPRINT_VERSION: int = 1
 
-# The Python version used for compiling OCB code
+# The Python version used for compiling OCB code, intentionally kept at 3.11 even though the node itself requires a
+# newer Python: it defines which on-chain blueprint sources are considered valid, so bumping it is a consensus change
 PYTHON_CODE_COMPAT_VERSION: tuple[int, int] = (3, 11)
 
 

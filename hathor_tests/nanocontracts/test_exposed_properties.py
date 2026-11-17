@@ -144,13 +144,6 @@ KNOWN_CASES = [
     'typing.Union._name',
 ]
 
-# XXX: these only appear in Python 3.11
-if version_info[1] == 11:
-    KNOWN_CASES.extend([
-        'hathor.SignedData._is_protocol',
-    ])
-
-
 # XXX: these only appear in Python 3.13
 if version_info[1] == 13:
     KNOWN_CASES.extend([
