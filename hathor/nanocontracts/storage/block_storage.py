@@ -4,6 +4,7 @@
 # Re-export from hathorlib for backward compatibility
 from hathorlib.nanocontracts.storage.block_storage import *  # noqa: F401,F403
 from hathorlib.nanocontracts.storage.block_storage import (  # noqa: F401
+    AddressBalanceKey,
     AddressKey,
     BlockTrieTag,
     ContractKey,
