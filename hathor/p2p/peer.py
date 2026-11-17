@@ -110,6 +110,13 @@ class PeerInfo:
     def get_ipv6_only_entrypoints(self) -> list[PeerAddress]:
         return list(filter(lambda e: e.is_ipv6(), self.entrypoints))
 
+    def get_connectable_entrypoints(self, *, enable_ipv6: bool, disable_ipv4: bool) -> list[PeerAddress]:
+        """Return the entrypoints we can connect to given the IP-family configuration.
+
+        IPv6 entrypoints require IPv6 to be enabled; IPv4 entrypoints require IPv4 not to be disabled.
+        """
+        return [e for e in self.entrypoints if (enable_ipv6 if e.is_ipv6() else not disable_ipv4)]
+
     def ipv4_entrypoints_as_str(self) -> list[str]:
         return sorted(map(str, self.get_ipv4_only_entrypoints()))
 
