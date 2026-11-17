@@ -20,6 +20,7 @@ from hathor.wallet.resources.thin_wallet import (
     TokenResource,
 )
 from hathor_tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_tx, create_fee_tokens, create_tokens
 
 # Valid base58check payload (25 bytes, correct checksum) whose string is only 33 characters long, from the
@@ -499,7 +500,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         private_key = self.manager.wallet.get_private_key(address)
 
         output_address = decode_address(self.get_address(0))
-        o = TxOutput(100, create_output_script(output_address, None), 1)
+        o = TxOutput(UnsignedAmount.from_v1(100), create_output_script(output_address, None), 1)
         i = TxInput(tx.hash, 0, b'')
 
         tx2 = Transaction(inputs=[i], outputs=[o], tokens=[token_uid])

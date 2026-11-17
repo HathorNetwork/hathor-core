@@ -49,8 +49,8 @@ class WalletOutputInfo(NamedTuple):
 
 
 class WalletBalance(NamedTuple):
-    locked: UnsignedAmount = 0
-    available: UnsignedAmount = 0
+    locked: UnsignedAmount = UnsignedAmount.zero()
+    available: UnsignedAmount = UnsignedAmount.zero()
 
 
 class WalletBalanceUpdate(NamedTuple):
@@ -165,7 +165,7 @@ class BaseWallet:
 
     def get_balance_per_address(self, token_uid: TokenUid) -> dict[AddressB58, UnsignedAmount]:
         """Return balance per address for a given token. This method ignores locks."""
-        balances: defaultdict[AddressB58, UnsignedAmount] = defaultdict(int)
+        balances: defaultdict[AddressB58, UnsignedAmount] = defaultdict(UnsignedAmount.zero)
         for utxo_info, unspent_tx in self.unspent_txs[token_uid].items():
             balances[unspent_tx.address] += unspent_tx.value
         return dict(balances)
@@ -417,7 +417,7 @@ class BaseWallet:
         :param timestamp: the tx timestamp
         :type timestamp: int
         """
-        token_dict: dict[bytes, UnsignedAmount] = defaultdict(int)
+        token_dict: dict[bytes, UnsignedAmount] = defaultdict(UnsignedAmount.zero)
         for output in outputs:
             token_uid = bytes.fromhex(output.token_uid)
             token_dict[token_uid] += output.value
@@ -526,7 +526,7 @@ class BaseWallet:
         :raises InsufficientFunds: if the wallet does not have enough ballance
         """
         inputs_tx = []
-        total_inputs_amount = 0
+        total_inputs_amount = UnsignedAmount.zero()
 
         utxos = self.unspent_txs[token_uid]
         for utxo in utxos.values():
@@ -658,7 +658,7 @@ class BaseWallet:
                         value = resolved.value
                     else:
                         # For shielded outputs, use 0 as fallback (value is hidden)
-                        value = 0
+                        value = UnsignedAmount.zero()
                     spent = SpentTx(tx.hash, _input.tx_id, _input.index, value, tx.timestamp)
                     self.spent_txs[key].append(spent)
 
@@ -734,7 +734,7 @@ class BaseWallet:
 
                 # Add as unspent output
                 utxo = UnspentTx(
-                    tx.hash, actual_index, secrets.value, tx.timestamp,
+                    tx.hash, actual_index, UnsignedAmount(secrets.value), tx.timestamp,
                     script_type_out.address, 0,
                     timelock=script_type_out.timelock,
                 )
@@ -1122,7 +1122,9 @@ class BaseWallet:
                 else:
                     balance['available'] += utxo.value
 
-            self.balance[token_id] = WalletBalance(balance['locked'], balance['available'])
+            self.balance[token_id] = WalletBalance(
+                UnsignedAmount(balance['locked']), UnsignedAmount(balance['available'])
+            )
 
         self.should_schedule_update(smallest_timestamp)
 

@@ -68,7 +68,7 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
          Returns:
              int: The total transaction fee
          """
-        fee = 0
+        fee = UnsignedAmount.zero()
 
         for token_uid, token_info in self.items():
             if token_info.chargeable_outputs > 0:

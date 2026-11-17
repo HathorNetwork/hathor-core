@@ -3,6 +3,7 @@
 
 import unittest
 
+from hathorlib.token_amount import UnsignedAmount
 from hathorlib.utils import (
     bytes_to_int,
     clean_token_string,
@@ -81,13 +82,13 @@ class TestDepositFunctions(unittest.TestCase):
     def test_deposit_amount(self) -> None:
         from hathorlib.conf import HathorSettings
         settings = HathorSettings()
-        result = get_deposit_token_deposit_amount(settings, 100)
-        self.assertIsInstance(result, int)
-        self.assertGreater(result, 0)
+        result = get_deposit_token_deposit_amount(settings, UnsignedAmount.from_v1(100))
+        self.assertIsInstance(result, UnsignedAmount)
+        self.assertGreater(result, UnsignedAmount.zero())
 
     def test_withdraw_amount(self) -> None:
         from hathorlib.conf import HathorSettings
         settings = HathorSettings()
-        result = get_deposit_token_withdraw_amount(settings, 100)
-        self.assertIsInstance(result, int)
-        self.assertGreater(result, 0)
+        result = get_deposit_token_withdraw_amount(settings, UnsignedAmount.from_v1(100))
+        self.assertIsInstance(result, UnsignedAmount)
+        self.assertGreater(result, UnsignedAmount.zero())

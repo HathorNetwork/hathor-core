@@ -19,6 +19,7 @@ from hathor.util import json_dumpb, json_loadb
 from hathor.verification.verification_params import VerificationParams
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
+from hathorlib.token_amount import UnsignedAmount
 
 
 @register_resource
@@ -56,7 +57,7 @@ class SendTokensResource(Resource):
             except InvalidAddress:
                 return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
 
-            value = int(output['value'])
+            value = UnsignedAmount(int(output['value']))
             timelock = output.get('timelock')
             token_uid = output.get('token_uid')
             if token_uid:

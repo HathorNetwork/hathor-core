@@ -29,7 +29,7 @@ from hathor.manager import HathorManager
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.util import initialize_hd_wallet
 from hathor.wallet import BaseWallet
-from hathorlib.token_amount import SignedAmount
+from hathorlib.token_amount import SignedAmount, UnsignedAmount
 
 logger = get_logger()
 
@@ -178,7 +178,7 @@ class DAGBuilder:
         to_node = self._get_or_create_node(_to)
         if len(to_node.outputs) <= _txout_index:
             to_node.outputs.extend([None] * (_txout_index - len(to_node.outputs) + 1))
-            to_node.outputs[_txout_index] = DAGOutput(0, '', {})
+            to_node.outputs[_txout_index] = DAGOutput(UnsignedAmount.zero(), '', {})
         from_node = self._get_or_create_node(_from)
         from_node.inputs.add(DAGInput(_to, _txout_index))
         return self
@@ -188,7 +188,7 @@ class DAGBuilder:
         node = self._get_or_create_node(name)
         if len(node.outputs) <= index:
             node.outputs.extend([None] * (index - len(node.outputs) + 1))
-        node.outputs[index] = DAGOutput(amount, token, attrs)
+        node.outputs[index] = DAGOutput(UnsignedAmount(amount), token, attrs)
         if token != 'HTR':
             self._get_or_create_node(token, default_type=DAGNodeType.Token)
             node.deps.add(token)
@@ -224,9 +224,9 @@ class DAGBuilder:
             if amount < 0:
                 raise SyntaxError(f'unexpected negative action in `{value}`')
             multiplier = 1 if key == NC_WITHDRAWAL_KEY else -1
-            self.update_balance(name, token, amount * multiplier)
+            self.update_balance(name, token, SignedAmount(amount * multiplier))
             actions = node.get_attr_list(key, default=[])
-            actions.append((token, amount))
+            actions.append((token, UnsignedAmount(amount)))
             node.attrs[key] = actions
 
         else:
@@ -262,8 +262,8 @@ class DAGBuilder:
             raise SyntaxError(f'unexpected args in `{value}`')
         if amount < 0:
             raise SyntaxError(f'unexpected negative fee in `{value}`')
-        self.update_balance(name, token, -amount)
-        fees.append((token, amount))
+        self.update_balance(name, token, SignedAmount(-amount))
+        fees.append((token, UnsignedAmount(amount)))
         node.attrs[key] = fees
 
     def add_attribute(self, name: str, key: str, value: str) -> Self:
@@ -285,7 +285,7 @@ class DAGBuilder:
             token = key[len('balance_'):]
             if token in node.balances:
                 raise SyntaxError(f'{name}: balance set more than once for {token}')
-            self.update_balance(name, token, int(value))
+            self.update_balance(name, token, SignedAmount(int(value)))
             return self
 
         node = self._get_or_create_node(name)

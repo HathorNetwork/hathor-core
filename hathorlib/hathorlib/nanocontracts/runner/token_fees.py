@@ -23,10 +23,10 @@ def calculate_mint_fee(
             raise AssertionError
         case TokenVersion.DEPOSIT:
             _validate_deposit_based_payment_token(fee_payment_token)
-            return -get_deposit_token_deposit_amount(settings, amount)
+            return -get_deposit_token_deposit_amount(settings, amount).to_signed()
         case TokenVersion.FEE:
             _validate_fee_based_payment_token(fee_payment_token)
-            return -_calculate_unit_fee_token_fee(settings, fee_payment_token)
+            return -_calculate_unit_fee_token_fee(settings, fee_payment_token).to_signed()
         case _:  # pragma: no cover
             assert_never(token_version)
 
@@ -44,10 +44,10 @@ def calculate_melt_fee(
             raise AssertionError
         case TokenVersion.DEPOSIT:
             _validate_deposit_based_payment_token(fee_payment_token)
-            return +get_deposit_token_withdraw_amount(settings, amount)
+            return +get_deposit_token_withdraw_amount(settings, amount).to_signed()
         case TokenVersion.FEE:
             _validate_fee_based_payment_token(fee_payment_token)
-            return -_calculate_unit_fee_token_fee(settings, fee_payment_token)
+            return -_calculate_unit_fee_token_fee(settings, fee_payment_token).to_signed()
         case _:  # pragma: no cover
             assert_never(token_version)
 
@@ -72,7 +72,7 @@ def _validate_fee_based_payment_token(fee_payment_token: TokenDescription) -> No
 def _calculate_unit_fee_token_fee(settings: HathorSettings, fee_payment_token: TokenDescription) -> UnsignedAmount:
     """Calculate the fee for handling a fee-based token"""
     if fee_payment_token.token_id == HATHOR_TOKEN_UID:
-        return settings.FEE_PER_OUTPUT_V1
+        return UnsignedAmount(settings.FEE_PER_OUTPUT_V1)
     numerator = settings.FEE_PER_OUTPUT_V1 * settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
     assert numerator % settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR == 0
-    return numerator // settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR
+    return UnsignedAmount(numerator // settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR)

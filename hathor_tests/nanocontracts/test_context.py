@@ -87,7 +87,7 @@ class ContextTestCase(BlueprintTestCase):
 
         for i, output in enumerate(nc2.outputs):
             parsed = not_none(parse_address_script(output.script))
-            assert vertex_data.outputs[i].value == output.value
+            assert vertex_data.outputs[i].value == output.value.raw()
             assert vertex_data.outputs[i].raw_script == output.script
             assert not_none(vertex_data.outputs[i].parsed_script).type == parsed.get_type()
             assert not_none(vertex_data.outputs[i].parsed_script).address == parsed.get_address()

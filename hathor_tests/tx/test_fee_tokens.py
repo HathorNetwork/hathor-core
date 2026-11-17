@@ -167,7 +167,7 @@ class FeeTokenTest(unittest.TestCase):
 
         # melt tokens and transfer melt authority
         melt_amount = 100
-        new_token_amount = tx.outputs[0].value - melt_amount
+        new_token_amount = tx.outputs[0].value.raw() - melt_amount
 
         inputs = [
             # token amount
@@ -371,7 +371,7 @@ class FeeTokenTest(unittest.TestCase):
             # Melt authority
             TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001),
             # HTR change output
-            TxOutput(htr_change_value, script, 0),
+            TxOutput(htr_change_value.to_v1(), script, 0),
             # deposit token change output: 500 - 100(fee in the header) - 200(melt) = 200
             TxOutput(UnsignedAmount.from_v1(200), script, 2)
         ]

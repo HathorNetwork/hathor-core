@@ -78,7 +78,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
 
         # Invalid negative amount
         with pytest.raises(InvalidFeeAmount, match="fees should be a positive integer, got -50"):
-            fees = [FeeHeaderEntry(token_index=0, amount=-50)]  # HTR fee
+            fees = [FeeHeaderEntry(token_index=0, amount=UnsignedAmount(-50))]  # HTR fee
             header = self._create_fee_header(tx, fees)
             FeeHeaderVerifier.verify_fee_list(header, tx)
 
