@@ -13,7 +13,7 @@ from twisted.python.failure import Failure
 from hathor.manager import HathorManager
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.peer import PeerInfo, PrivatePeer, PublicPeer
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.protocol import HathorLineReceiver, HathorProtocol
 from hathor.simulator import FakeConnection
@@ -458,6 +458,49 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.clock.advance(10)
         # Peer id 2 removed from peer_storage (known_peers) after disconnection and after looping call
         self.assertNotIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
+
+    def test_connection_lost_during_validate_entrypoint(self) -> None:
+        """The remote closes the connection while `handle_peer_id` awaits `validate_entrypoint`.
+
+        Once resumed, the handler must not touch the transport (a closed TLS transport raises
+        `AttributeError` on `getPeerCertificate`), nor mark the peer as validated or send READY.
+        """
+        pending: list[defer.Deferred[bool]] = []
+
+        def suspended_validate_entrypoint(*args: object) -> defer.Deferred[bool]:
+            d: defer.Deferred[bool] = defer.Deferred()
+            pending.append(d)
+            return d
+
+        self.conn.run_one_step()  # HELLO
+
+        with (
+            patch.object(PeerInfo, 'validate_entrypoint', suspended_validate_entrypoint),
+            patch.object(
+                PublicPeer, 'validate_certificate', autospec=True, side_effect=PublicPeer.validate_certificate,
+            ) as validate_certificate,
+            patch.object(self.conn.proto1, '_on_cmd_handler_error') as on_cmd_handler_error,
+        ):
+            self.conn.run_one_step()  # PEER-ID, both handlers suspend in validate_entrypoint
+            self.assertEqual(len(pending), 2)
+
+            self.conn.disconnect(Failure(Exception('remote closed')))
+            # mimic `TLSMemoryBIOProtocol` after `connectionLost`, whose TLS connection is gone
+            self.conn.tr1.getPeerCertificate = Mock(  # type: ignore[method-assign]
+                side_effect=AttributeError("'NoneType' object has no attribute 'get_peer_certificate'"),
+            )
+            self.conn.tr1.clear()
+
+            for d in pending:
+                d.callback(True)
+
+            for call in on_cmd_handler_error.call_args_list:
+                failure, _cmd = call.args
+                failure.raiseException()
+            validate_certificate.assert_not_called()
+
+        self.assertIsNone(self.conn.proto1._peer)
+        self.assertNotIn(b'READY', self.conn.tr1.value())
 
     def test_idle_connection(self) -> None:
         self.clock.advance(self._settings.PEER_IDLE_TIMEOUT - 10)

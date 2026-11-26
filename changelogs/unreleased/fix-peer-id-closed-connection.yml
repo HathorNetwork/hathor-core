@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
+---
+title: Stop PEER-ID validation quietly when the remote closes the connection during it
+merge_request:
+author:
+type: fix

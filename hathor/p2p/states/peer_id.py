@@ -122,6 +122,11 @@ class PeerIdState(BaseState):
                 return
 
         entrypoint_valid = await peer.info.validate_entrypoint(protocol)
+        if protocol.aborting:
+            # The connection was dropped while we awaited, so the transport can no longer be used.
+            self.log.debug('connection closed during peer-id validation', peer_id=peer.id)
+            return
+
         if not entrypoint_valid:
             protocol.send_error_and_close_connection('Connection string is not in the entrypoints.')
             return
