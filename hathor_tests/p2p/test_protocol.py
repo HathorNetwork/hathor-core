@@ -459,11 +459,12 @@ class HathorProtocolTestCase(unittest.TestCase):
         # Peer id 2 removed from peer_storage (known_peers) after disconnection and after looping call
         self.assertNotIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
 
-    def test_connection_lost_during_validate_entrypoint(self) -> None:
+    def _run_connection_lost_during_validate_entrypoint(self, entrypoint_valid: bool) -> None:
         """The remote closes the connection while `handle_peer_id` awaits `validate_entrypoint`.
 
-        Once resumed, the handler must not touch the transport (a closed TLS transport raises
-        `AttributeError` on `getPeerCertificate`), nor mark the peer as validated or send READY.
+        Once resumed, neither side may touch its transport (a closed TLS transport raises
+        `AttributeError` on `getPeerCertificate` and on `abortConnection`), mark the peer as
+        validated, send anything, or re-arm the idle timeout.
         """
         pending: list[defer.Deferred[bool]] = []
 
@@ -479,28 +480,38 @@ class HathorProtocolTestCase(unittest.TestCase):
             patch.object(
                 PublicPeer, 'validate_certificate', autospec=True, side_effect=PublicPeer.validate_certificate,
             ) as validate_certificate,
-            patch.object(self.conn.proto1, '_on_cmd_handler_error') as on_cmd_handler_error,
+            patch.object(self.conn.proto1, '_on_cmd_handler_error') as on_cmd_handler_error1,
+            patch.object(self.conn.proto2, '_on_cmd_handler_error') as on_cmd_handler_error2,
         ):
             self.conn.run_one_step()  # PEER-ID, both handlers suspend in validate_entrypoint
             self.assertEqual(len(pending), 2)
 
             self.conn.disconnect(Failure(Exception('remote closed')))
             # mimic `TLSMemoryBIOProtocol` after `connectionLost`, whose TLS connection is gone
-            self.conn.tr1.getPeerCertificate = Mock(  # type: ignore[method-assign]
-                side_effect=AttributeError("'NoneType' object has no attribute 'get_peer_certificate'"),
-            )
-            self.conn.tr1.clear()
+            for tr in (self.conn.tr1, self.conn.tr2):
+                tr.getPeerCertificate = Mock(  # type: ignore[method-assign]
+                    side_effect=AttributeError("'NoneType' object has no attribute 'get_peer_certificate'"),
+                )
+                tr.clear()
 
             for d in pending:
-                d.callback(True)
+                d.callback(entrypoint_valid)
 
-            for call in on_cmd_handler_error.call_args_list:
+            for call in on_cmd_handler_error1.call_args_list + on_cmd_handler_error2.call_args_list:
                 failure, _cmd = call.args
                 failure.raiseException()
             validate_certificate.assert_not_called()
 
-        self.assertIsNone(self.conn.proto1._peer)
-        self.assertNotIn(b'READY', self.conn.tr1.value())
+        for proto, tr in ((self.conn.proto1, self.conn.tr1), (self.conn.proto2, self.conn.tr2)):
+            self.assertIsNone(proto._peer)
+            self.assertEqual(tr.value(), b'')
+            self.assertIsNone(proto._idle_timeout_call_later)
+
+    def test_connection_lost_during_validate_entrypoint(self) -> None:
+        self._run_connection_lost_during_validate_entrypoint(entrypoint_valid=True)
+
+    def test_connection_lost_during_invalid_entrypoint(self) -> None:
+        self._run_connection_lost_during_validate_entrypoint(entrypoint_valid=False)
 
     def test_idle_connection(self) -> None:
         self.clock.advance(self._settings.PEER_IDLE_TIMEOUT - 10)
