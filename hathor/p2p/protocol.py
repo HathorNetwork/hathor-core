@@ -231,6 +231,10 @@ class HathorProtocol:
 
     def reset_idle_timeout(self) -> None:
         """Reset idle timeout."""
+        if self.aborting:
+            # A closing connection keeps its current timer as the close's backstop. After connectionLost it has none,
+            # and an async handler that returns late must not schedule one on the dead transport.
+            return
         if self._idle_timeout_call_later is not None:
             self._idle_timeout_call_later.cancel()
             self._idle_timeout_call_later = None
